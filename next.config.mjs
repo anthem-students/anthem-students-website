@@ -17,7 +17,9 @@ const nextConfig = {
       // client strips the marker on boot. Temporary, so it's never cached itself.
       { source: "/roster", destination: "/?from=roster", permanent: false },
       // 308 keeps the method, so old POSTs to /roster/api/... still land.
-      { source: "/roster/:path*", destination: "/:path*", permanent: true },
+      // :path+ (one or more segments), not :path* — the star also matches bare
+      // /roster, and on Vercel that won over the rule above.
+      { source: "/roster/:path+", destination: "/:path+", permanent: true },
     ];
   },
 };

@@ -12,7 +12,6 @@ These were found during the November 2026 audit and deliberately left alone. Eac
 ## Data integrity
 
 - **Lists in `roster_kv` are read-modify-write.** Notes, hangouts and the connection log are each one JSON array per student. If two leaders add to the same student's list at the same instant, one entry can be lost. Rare with this team's size. The fix is an RPC that appends atomically, or moving these into real tables.
-- **Expired `roster_kv` rows are never deleted.** They only read back as missing. Activity (90 days), audit, rate-limit and metric rows accumulate. A daily `delete from roster_kv where expires_at < now()` (Supabase cron or a Vercel cron route) would keep the table small.
 - **Renaming a leader's email isn't atomic** (`lib/renameUser.ts`). A failure partway through leaves some records on the old address. It's ordered so the account itself is never lost.
 
 ## Code health

@@ -6,8 +6,8 @@ import { supabaseAdmin } from "./supabaseAdmin";
 // apprentice:, photoCrop:, activity:, pwdreset:, signupAction:, audit:,
 // metric:, ratelimit:) — docs/ARCHITECTURE.md lists what each one holds.
 //
-// Expiry is lazy (checked on read) rather than a background sweep — an
-// expired row just reads back as absent.
+// Expiry is checked on read, so an expired row reads back as absent. A daily
+// pg_cron job (supabase/migrations/*_roster_kv_expiry_sweep.sql) deletes them.
 
 export async function kvGet<T = unknown>(key: string): Promise<T | null> {
   const { data, error } = await supabaseAdmin()

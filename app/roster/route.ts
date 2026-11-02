@@ -5,7 +5,7 @@ import { APP_JS } from "./appShell/clientScript";
 // Ported from the original Worker's html/index.js. Returned as a raw HTML
 // Response (not a React page) on purpose: the app underneath is a
 // self-contained vanilla-JS SPA that does its own DOM manipulation, so it
-// stays outside the main site's React tree and global.css/layout entirely.
+// stays outside React and the root layout entirely.
 function getHTML() {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -18,8 +18,7 @@ function getHTML() {
 <meta name="theme-color" content="#0a0a0f">
 <title>ASM 2026 · Anthem Students</title>
 <link rel="manifest" href="/roster/manifest.json">
-<!-- Scoped to /roster on purpose: without these the browser falls back to the
-     main site's /favicon.ico, and the roster app gets its own mark. -->
+<!-- The roster's own icons; there is no site-wide /favicon.ico. -->
 <link rel="icon" type="image/png" sizes="16x16" href="/roster-icon-16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/roster-icon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/roster-icon-192.png">

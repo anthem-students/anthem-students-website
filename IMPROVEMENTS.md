@@ -1,14 +1,13 @@
 # Anthem Students Hub — Internal Tool Audit
 
-Scope: the leader-facing surfaces only — `app/admin/**` (week editor, notes paste, publish & send,
-events) and `app/roster/**` (the vanilla-JS SPA). Ranked strictly by what a leader experiences today.
-15 items, hard cap.
+Scope: `app/roster/**` (the vanilla-JS SPA). Ranked strictly by what a leader experiences today.
+The main site and its `/admin` were removed in Nov 2026; the items that only concerned them are gone,
+so the IMP numbers below have gaps.
 
-Two things shape the ranking. First, the data in `/roster` is names, grades, schools, birthdays,
+One thing shapes the ranking. The data in `/roster` is names, grades, schools, birthdays,
 photos, and pastoral-care notes about minors — the placeholder in the Log Hangout modal
 (`appShell/body.ts:714`) is *"she opened up about some struggles at home… Prayed together at the
-end."* That is the sensitivity bar. Second, `/admin` exists to satisfy one constraint from SPEC §2:
-publishing a week has to fit in a coffee break. Items are measured against those two jobs.
+end."* That is the sensitivity bar, and items are measured against it.
 
 IMP-01 through IMP-05 were verified live against the running app and the real Google Sheet.
 
@@ -62,35 +61,14 @@ Fix: Add `requirePermission("roster", "view")` to `sheet/read`, `requirePermissi
 Blast radius: three route files. If the permission matrix is wrong for the passcode role, view-only users lose the roster — check `DEFAULT_MODULES` in `lib/auth.ts:72-80` before shipping. Regression risk: MED
 Effort: S
 
-## IMP-07 — The week editor has no publish button, and "Publish & send →" doesn't publish
-STATUS: PENDING
-Impact: The one job of `/admin` is getting a week live on Thursday morning. The big primary button at the bottom of the editor says "Publish & send →" — it is an `<a href>` to a stats page that does not publish anything. A leader clicks it, lands on a screen headed "Week 2 is not live yet", reads "Still a draft — publish it in the editor before you send this", and goes back to hunt for a control that isn't labelled. The actual publish control is an unlabelled 42×24 toggle switch under a "Status" label, visually identical to the "Reduce screen effects" toggle on the student side, which flips the week live 800ms later via autosave with no confirmation step. So the destructive-ish action is a silent toggle and the reassuring-looking button is inert.
-Root cause: `app/admin/week/[id]/WeekEditor.tsx:404` (the link), `:373` (the toggle), `:125-134` (`toggleStatus`).
-Fix: Make the primary button an explicit action: "Publish this week" when the week is a draft, which sets status and `published_at`, waits for the save to confirm, then navigates to the publish screen. Demote the toggle to an "Unpublish" control in the danger section next to Delete. Keep the button as "Publish & send →" only once the week is already live.
-Blast radius: `WeekEditor.tsx` and the publish page's copy. The status field is on the same debounced autosave as everything else, so the publish action needs to await its own write rather than ride the debounce. Regression risk: MED
-Effort: M
 
-## IMP-08 — "Draft · goes live Thursday 6:00 AM" never happens
-STATUS: PENDING
-Impact: A leader sets a scheduled publish time, leaves the week as a draft, and the All Weeks list confirms it back to them: "Draft · goes live Sep 4, 6:00 AM". Thursday morning arrives and students get nothing. Public visibility is gated at read time on `status = 'live' AND (scheduled_publish_at is null OR scheduled_publish_at <= now())` — scheduling only works if the week is *already* marked live, and nothing anywhere flips a draft to live on a schedule. The list is stating a promise the system cannot keep, on the exact screen a leader checks before walking away for the week.
-Root cause: `app/admin/weeks/WeeksList.tsx:24-32` (`stateLine`), against the policy in `supabase/migrations/20260817222536_weeks_public_read_time_gating.sql:9-12`.
-Fix: In the editor, treat scheduling as part of publishing — when a scheduled time is set, the publish action marks the week live with that future timestamp, which is exactly what the RLS gate expects. In `stateLine`, a draft with a scheduled time should read "Draft · won't publish until you publish it", and only a live week with a future time should say "goes live …".
-Blast radius: `WeeksList.tsx` and `WeekEditor.tsx`. No schema change — the RLS gate is already correct. Regression risk: LOW
-Effort: S
 
-## IMP-09 — Autosave failure is a 10px label in a header you've scrolled past, and it vanishes when you keep typing
-STATUS: PENDING
-Impact: The week editor is a long form — series, verse, recap, heads-up, three starters, and three full days of passage/thought/question. The only save feedback is a 10px uppercase mono label in the page header, which is off-screen by the time a leader is writing Day 2. When a save fails it reads "Save failed" in pink up there, and the very next keystroke resets the state to idle and wipes it (`setSaveState("idle")` runs before the debounce). So a leader whose session expired can type an entire week's content into a form that is silently discarding all of it, with no error visible at any point. Separately, any navigation within 800ms of the last keystroke kills the pending save — and "Duplicate last week" and "Publish & send →" are both full navigations sitting right at the bottom of the form. There is no `beforeunload` guard.
-Root cause: `app/admin/week/[id]/WeekEditor.tsx:54` (state reset on every change), `:106` (error set and then forgotten), `:395-407` (navigating actions adjacent to the form).
-Fix: Keep the failure sticky until a save actually succeeds — don't reset to idle on edit — and render it as a real banner at the top of the form rather than a header chip, with a Retry. Add a `beforeunload` handler while a save is pending or failed, and flush the pending debounce before the publish/duplicate navigations.
-Blast radius: `WeekEditor.tsx` only. A sticky error that never clears would be worse than the current state, so make sure a successful save clears it. Regression risk: LOW
-Effort: M
 
 ## IMP-10 — A leader who forgets their password can never get back in
 STATUS: PENDING
-Impact: Both roster sign-in forms and the admin login have no way to recover an account. `/admin/login` shows the words "Forgot password" as plain grey text — not a link, not a button, nothing happens when you click it. The roster gate has no forgot-password affordance at all. The backend is fully built and working: `forgot-password` mints a token and emails a link, `reset-password` accepts it, `admin/invite/manual` onboards a leader with `mustChangePassword`. None of it is reachable, and the client never reads the `resetToken`, `onboardToken`, or `inviteToken` query params those emails link to. Adminland can change a user's role but cannot reset a password. With 1–3 leaders and 30-day sessions, this surfaces rarely and then absolutely.
-Root cause: `app/admin/login/LoginForm.tsx:82` (`<div>` styled as a footnote); `app/roster/appShell/body.ts:35-46` (gate leader form, no link); no `resetToken` handling anywhere in `clientScript.ts` (the boot sequence at `:1789-1826` never reads the query string).
-Fix: On `/admin/login`, make it a real link to Supabase's `resetPasswordForEmail` flow. On `/roster`, add a "Forgot password?" link under the gate's password field that POSTs to the existing `forgot-password` route, and handle `?resetToken=` on boot by showing a set-new-password form that POSTs to the existing `reset-password` route.
+Impact: The roster sign-in forms have no way to recover an account. The roster gate has no forgot-password affordance at all. The backend is fully built and working: `forgot-password` mints a token and emails a link, `reset-password` accepts it, `admin/invite/manual` onboards a leader with `mustChangePassword`. None of it is reachable, and the client never reads the `resetToken`, `onboardToken`, or `inviteToken` query params those emails link to. Adminland can change a user's role but cannot reset a password. With 1–3 leaders and 30-day sessions, this surfaces rarely and then absolutely.
+Root cause: `app/roster/appShell/body.ts:35-46` (gate leader form, no link); no `resetToken` handling anywhere in `clientScript.ts` (the boot sequence at `:1789-1826` never reads the query string).
+Fix: On `/roster`, add a "Forgot password?" link under the gate's password field that POSTs to the existing `forgot-password` route, and handle `?resetToken=` on boot by showing a set-new-password form that POSTs to the existing `reset-password` route.
 Blast radius: `LoginForm.tsx`, `body.ts`, and a new boot branch in `clientScript.ts`. Both backends already exist and are already tokenised, so this is wiring, not new auth. Regression risk: LOW
 Effort: M
 
@@ -118,13 +96,6 @@ Fix: Match on word boundaries against full first+last name, return a real `match
 Blast radius: the brain-dump route and its result renderer. If the feature is unused, see the argument against this item below. Regression risk: LOW
 Effort: M
 
-## IMP-14 — Photo and week-graphic upload failures are completely silent
-STATUS: PENDING
-Impact: In the week editor, in the events admin, and on student photos, a failed upload does nothing at all — `if (!error)` guards the success path and there is no `else`. The "Uploading…" text disappears, the preview stays blank, no toast, no message. The leader assumes they mis-clicked and tries again, gets the same nothing, and concludes image upload is broken without ever learning why (an oversized file, a missing storage bucket, an expired session). In the events admin this happens while they are mid-form, so the instinct is to abandon the form.
-Root cause: `app/admin/week/[id]/WeekEditor.tsx:144-148`, `app/admin/events/EventsAdmin.tsx:79-84`.
-Fix: Add the `else` branch in both places and surface `error.message` in the existing error slot the screen already renders. Also check the file size before uploading and say so when it is too large, since that is the common case.
-Blast radius: two functions. Regression risk: LOW
-Effort: S
 
 ## IMP-15 — Saving a student throws away the search or filter you were using
 STATUS: PENDING
@@ -141,8 +112,7 @@ Effort: S
 **Rewrite `/roster` as React components.** It is 3,700 lines of vanilla JS, CSS, and HTML served as a
 string from a route handler, and it is genuinely ugly. It also works, and every item above is a
 targeted fix inside it. A rewrite would take weeks, would re-introduce its own bugs in code paths
-that currently behave, and would deliver nothing a leader can see. The isolation from the main React
-tree is deliberate and documented at `route.ts:5-8`.
+that currently behave, and would deliver nothing a leader can see. The isolation from React is deliberate and documented at `route.ts:5-8`.
 
 **Replace the Google Sheet with a Postgres table.** IMP-05 is a mapping bug in the Apps Script, not
 evidence the sheet is the wrong store. The sheet is the thing leaders already open, sort, and paste
@@ -150,28 +120,11 @@ into; moving the roster into `roster_kv` or a new table would mean building the 
 surface the spreadsheet gives away for free, and would break whatever else in the ministry reads
 that sheet. Fix the mapping.
 
-**Add version history or undo for week edits.** The autosave problems in IMP-09 look like they want a
-revision log. They don't — they want the save to be honest about failing. A revision table, diffing,
-and restore UI is a large feature for 1–3 leaders editing one week a week, and it would not have
-prevented a single failure described above.
-
-**Unify the admin and roster visual languages into a shared design system.** `/admin` is VHS-retro,
-`/roster` is a yellow-accented card UI, and they share no tokens. That is real, and it is cosmetic.
-The retro treatment is a deliberate product decision documented in SPEC §4, the roster was ported
-from a separate app, and the same three people use both. Nothing in this audit is caused by the
-inconsistency.
-
 **Build offline support and an optimistic-write queue for the roster.** Tempting because IMP-04's
 toast already claims local saving exists. Making the claim true means a durable queue, replay,
 conflict resolution against a spreadsheet other people edit, and a sync-state UI — a large amount of
 machinery whose failure modes are worse and harder to reason about than the current ones. Tell the
 truth in the toast instead; that is IMP-04's actual fix.
-
-**Build the `/admin/settings` screen that SPEC §2 lists.** It has no mockup, no defined fields beyond
-"site/church-level configuration", and the only setting anything reads today is `site_domain` on the
-publish screen — which already falls back to the request host and works. Building a settings screen
-to hold one value that already has a working default is inventing work. Set the row directly if the
-fallback is ever wrong.
 
 **Add a test suite and convert `clientScript.ts` to real TypeScript.** It is a template literal, so
 the compiler checks nothing inside it, and that is how bugs like IMP-01 survive. But retrofitting a

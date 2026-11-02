@@ -1,6 +1,6 @@
 import { CSS } from "./appShell/css";
 import { HTML_BODY } from "./appShell/body";
-import { APP_JS } from "./appShell/clientScript";
+import { APP_JS } from "./appShell/client";
 
 // Ported from the original Worker's html/index.js. Returned as a raw HTML
 // Response (not a React page) on purpose: the app underneath is a

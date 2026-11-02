@@ -90,7 +90,7 @@ body {
    for keyboard focus and stays silent on a mouse click. */
 .nav-pill:focus-visible, .seg-btn:focus-visible, .filter-toggle-btn:focus-visible,
 .mob-nav-pill:focus-visible, .bnav-btn:focus-visible, .add-btn:focus-visible,
-.filter-action-btn:focus-visible, .chip.chip-toggle:focus-visible, .s-chip:focus-visible,
+.filter-action-btn:focus-visible, .chip.chip-toggle:focus-visible,
 .s-theme-opt:focus-visible, .settings-tab:focus-visible, .admin-tab:focus-visible,
 .nav-hamburger:focus-visible, .nav-avatar:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
@@ -1312,37 +1312,6 @@ footer { text-align: center; padding: 48px 0 32px; color: var(--muted); font-siz
 .s-toggle.on { background: var(--accent); border-color: var(--accent); }
 .s-toggle.on .s-toggle-knob { left: 22px; background: #000; }
 
-/* ── Chips (multi-select) ─────────────────────────────────── */
-.s-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.s-chip {
-  padding: 6px 14px; border-radius: 30px; font-size: 13px;
-  font-family: 'Inter', sans-serif; font-weight: 500;
-  cursor: pointer; border: 1px solid var(--border2);
-  background: var(--surface2); color: var(--text2);
-  transition: all .2s var(--ease); user-select: none;
-}
-.s-chip:hover { border-color: var(--accent-border); color: var(--text); }
-.s-chip.selected { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
-
-/* ── Grade Tab Config ─────────────────────────────────────── */
-.s-grade-tabs-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
-.s-grade-tab-group {
-  background: var(--surface2); border: 1px solid var(--border2);
-  border-radius: var(--radius); padding: 14px;
-}
-.s-grade-tab-label {
-  font-family: 'JetBrains Mono', monospace; font-size: 10px;
-  letter-spacing: .16em; text-transform: uppercase; color: var(--accent);
-  margin-bottom: 8px;
-}
-.s-grade-tab-name {
-  background: var(--surface); border: 1px solid var(--border2);
-  border-radius: var(--radius-sm); padding: 7px 10px; color: var(--text);
-  font-size: 13px; width: 100%; outline: none; margin-bottom: 10px;
-  font-family: 'Inter', sans-serif; transition: border-color .2s, box-shadow .2s;
-}
-.s-grade-tab-name:focus { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-glow); }
-
 /* ── Logo Upload ──────────────────────────────────────────── */
 .s-logo-upload { display: flex; align-items: center; gap: 16px; margin-top: 12px; padding: 14px; background: var(--surface2); border: 1px solid var(--border2); border-radius: var(--radius); }
 .s-logo-preview { width: 80px; height: 80px; border-radius: var(--radius-sm); background: var(--surface3); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
@@ -1398,19 +1367,6 @@ footer { text-align: center; padding: 48px 0 32px; color: var(--muted); font-siz
   font-size: 13px; color: var(--text2); line-height: 1.5;
 }
 
-/* ── Roles Table ──────────────────────────────────────────── */
-.s-roles-table { width: 100%; border-collapse: collapse; }
-.s-roles-table th {
-  font-family: 'JetBrains Mono', monospace; font-size: 10px;
-  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
-  padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border);
-}
-.s-roles-table td {
-  padding: 10px 12px; border-bottom: 1px solid var(--border);
-  font-size: 13px; color: var(--text2);
-}
-.s-roles-table tr:last-child td { border-bottom: none; }
-
 /* ── Theme Selector ───────────────────────────────────────── */
 .s-theme-selector { display: flex; gap: 14px; }
 .s-theme-opt {
@@ -1454,7 +1410,6 @@ footer { text-align: center; padding: 48px 0 32px; color: var(--muted); font-siz
   .stab-icon { display: none; }
   .settings-content { padding-top: 16px; }
   .settings-card { padding: 18px; }
-  .s-grade-tabs-wrap { grid-template-columns: 1fr; }
   .s-theme-selector { flex-direction: row; }
   .s-theme-opt { padding: 12px 8px; }
   .settings-footer { padding: 12px 16px; }

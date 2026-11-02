@@ -17,8 +17,6 @@ const REFERENCING_PREFIXES = [
   "activity:",
   "signupAction:",
   "pwdreset:",
-  "onboard:",
-  "invite:",
 ];
 const EMAIL_FIELDS = new Set(["email", "leaderEmail", "updatedBy", "createdBy"]);
 

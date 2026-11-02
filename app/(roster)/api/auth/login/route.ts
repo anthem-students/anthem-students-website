@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { kvGet, kvPut, trackMetric } from "../../../lib/kv";
-import { safeUser, setSessionCookie, SESSION_TTL, type RosterUser } from "../../../lib/auth";
-import { generateToken, verifyPassword } from "../../../lib/crypto";
+import { kvGet, trackMetric } from "../../../lib/kv";
+import { safeUser, SESSION_TTL, startSession, type RosterUser } from "../../../lib/auth";
+import { verifyPassword } from "../../../lib/crypto";
 import { checkRateLimit, clearRateLimit, clientKey, tooManyRequests } from "../../../lib/rateLimit";
 
 const WINDOW = 15 * 60;
@@ -50,9 +50,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const token = generateToken();
-  await kvPut(`session:${token}`, { email: user.email, expiresAt: Date.now() + SESSION_TTL * 1000 }, SESSION_TTL);
-  await setSessionCookie(token, SESSION_TTL);
+  await startSession({ email: user.email }, SESSION_TTL);
   await trackMetric("login");
   await Promise.all(keys.map(([key]) => clearRateLimit("login", key)));
 

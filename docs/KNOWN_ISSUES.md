@@ -4,7 +4,6 @@ These were found during the November 2026 audit and deliberately left alone. Eac
 
 ## Security and privacy
 
-- **Session tokens are stored unhashed.** `session:{token}` holds the raw cookie value, so anyone who can read `roster_kv` could take over sessions. Reset and approval tokens are already stored as SHA-256 hashes; sessions should be too (`lib/auth.ts`, `api/auth/login`, `api/auth/passcode`, `api/auth/logout`).
 - **The shared passcode is stored in plain text** in `settings:org`, and Settings shows it back to admins. It's a shared view-only code rather than a personal password, but it should still be hashed.
 - **`SITE_PASSWORD` works even in "Leaders only" mode.** `api/auth/passcode` falls back to it whenever Settings doesn't define a passcode. The sign-in screen hides the passcode option in that mode, but the endpoint still accepts it. If leaders-only should really mean leaders only, check the mode there, or leave `SITE_PASSWORD` unset.
 - **View-only sessions can see the leader directory** (`/api/leaders`: names, emails, photos), because it's gated on "signed in", not on a permission.

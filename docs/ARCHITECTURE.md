@@ -61,7 +61,7 @@ Columns: `key text primary key, value jsonb, expires_at timestamptz`. Helpers li
 | Key | Value |
 | --- | --- |
 | `user:{email}` | Account: name, role, status, password hash, photo, crop |
-| `session:{token}` | `{email, expiresAt}` for leaders (30 days), `{type:"passcode"}` for view-only (8 hours) |
+| `session:{sha256(token)}` | `{email, expiresAt}` for leaders (30 days), `{type:"passcode"}` for view-only (8 hours). The cookie holds the token; only its hash is stored (`startSession` in `lib/auth.ts`). |
 | `settings:org` | Org settings, laid over the defaults in `lib/settings.ts` |
 | `goals:{sk}:{id}` | `{primaryGoal, goals:[{text, done, primary}]}` |
 | `notes:{sk}:{id}` | Running notes `[{id, text, leader, leaderEmail, createdAt}]` |

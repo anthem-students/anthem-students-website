@@ -1,7 +1,8 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { kvDelete, kvEntries, kvGet } from "./kv";
+import { kvDelete, kvEntries, kvGet, kvPut } from "./kv";
 import { DEFAULT_ROSTER_SETTINGS, SETTINGS_KEY } from "./settings";
+import { generateToken, hashToken } from "./crypto";
 
 export const SESSION_COOKIE_NAME = "asm_session";
 export const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days
@@ -48,18 +49,34 @@ export async function getToken(): Promise<string | null> {
   return jar.get(SESSION_COOKIE_NAME)?.value ?? null;
 }
 
-// Wrapped in React's cache() so the several independent permission checks
-// that now happen inside a single request (e.g. app/api/bootstrap,
-// which gates different pieces of its combined payload on different
-// modules) share one session/user lookup instead of re-hitting Supabase per
-// check — this was previously the biggest cost of the old one-endpoint-per-
-// data-slice roster load (up to 30+ sequential Supabase round trips).
+// Sessions are stored under the SHA-256 of the cookie token, never the token
+// itself, so someone who can read roster_kv (a backup, an export, the
+// dashboard) can't lift a working session out of it. Same as reset and
+// approval tokens.
+export async function sessionKey(token: string): Promise<string> {
+  return `session:${await hashToken(token)}`;
+}
+
+// Starts a session: a fresh random token in an httpOnly cookie, its hash in
+// roster_kv. `session` is { email } for a leader, { type: "passcode" } for a
+// view-only visitor.
+export async function startSession(session: { email?: string | null; type?: string }, ttlSeconds: number) {
+  const token = generateToken();
+  const expiresAt = Date.now() + ttlSeconds * 1000;
+  await kvPut(await sessionKey(token), { ...session, expiresAt }, ttlSeconds);
+  await setSessionCookie(token, ttlSeconds);
+  return { expiresAt };
+}
+
+// Wrapped in React's cache() so several permission checks inside one request
+// (api/bootstrap checks a few modules) share one session + user lookup.
 export const getSessionUser = cache(async (): Promise<RosterUser | null> => {
   const token = await getToken();
   if (!token) return null;
-  const sess = await kvGet<Session>(`session:${token}`);
+  const key = await sessionKey(token);
+  const sess = await kvGet<Session>(key);
   if (!sess || Date.now() > sess.expiresAt) {
-    if (sess) await kvDelete(`session:${token}`);
+    if (sess) await kvDelete(key);
     return null;
   }
   // Passcode session — synthetic read-only user (no email, no editing)

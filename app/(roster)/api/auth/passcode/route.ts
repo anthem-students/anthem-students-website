@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { kvGet, kvPut } from "../../../lib/kv";
-import { setSessionCookie } from "../../../lib/auth";
-import { timingSafeEqual, generateToken } from "../../../lib/crypto";
+import { kvGet } from "../../../lib/kv";
+import { startSession } from "../../../lib/auth";
+import { timingSafeEqual } from "../../../lib/crypto";
 import { checkRateLimit, clearRateLimit, clientKey, tooManyRequests } from "../../../lib/rateLimit";
 
 type OrgSettings = { access?: { mode?: string; passcode?: string } };
@@ -37,11 +37,8 @@ export async function POST(request: Request) {
   if (!correct || !passcode) return NextResponse.json({ error: "Invalid passcode" }, { status: 401 });
   if (!timingSafeEqual(passcode, correct)) return NextResponse.json({ error: "Invalid passcode" }, { status: 401 });
 
-  const TTL = 8 * 60 * 60;
-  const token = generateToken();
-  const expiresAt = Date.now() + TTL * 1000;
-  await kvPut(`session:${token}`, { type: "passcode", expiresAt }, TTL);
-  await setSessionCookie(token, TTL);
+  // View-only sessions last a working day, not the 30 days a leader gets.
+  const { expiresAt } = await startSession({ type: "passcode" }, 8 * 60 * 60);
   if (ip) await clearRateLimit("passcode", `ip:${ip}`);
 
   return NextResponse.json({ ok: true, expiresAt, message: "View-only mode enabled" });

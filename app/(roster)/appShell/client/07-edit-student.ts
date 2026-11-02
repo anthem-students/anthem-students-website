@@ -58,7 +58,7 @@ function updateEditPhotoPreview() {
   const url=v('ef-photoUrl'), name=v('ef-name')||'?';
   document.getElementById('edit-pv-fallback').textContent=initials(name);
   const img=document.getElementById('edit-pv-img');
-  const thumb=driveThumb(url);
+  const thumb=url||null;
   if(thumb){
     img.dataset.crop=efPhotoCrop?JSON.stringify(efPhotoCrop):'';
     img.style.display='';img.classList.remove('loaded');img.src=thumb;

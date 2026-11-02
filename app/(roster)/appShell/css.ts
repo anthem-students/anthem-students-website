@@ -1487,7 +1487,7 @@ span.dp-day.disabled { color: var(--muted); opacity: .3; cursor: not-allowed; }
 }
 /* ── MENTORS ───────────────────────────────────────────────── */
 /* Leader avatar used in pills, the picker and Adminland. Same fade-in as the
-   card avatar so a slow Drive photo never flashes a broken image. */
+   card avatar so a slow photo never flashes a broken image. */
 .m-av { position: relative; display: inline-flex; flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; overflow: hidden; }
 .m-av .av-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; color: #000; font-family: 'Inter', sans-serif; }
 .m-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; opacity: 0; transition: opacity .3s; }

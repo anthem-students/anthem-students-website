@@ -17,7 +17,7 @@ async function renderStudentDetail(sk, index) {
   const person=DATA[sk].students[index];
   const el=document.getElementById('student-content');
   const g=GRADIENTS[index%GRADIENTS.length];
-  const thumb=driveThumb(person.photoUrl);
+  const thumb=person.photoUrl||null;
   const age=calcAge(person.birthday);
 
   const tr2 = orgSettings?.tracking || {school:true,birthdays:true,age:true,showGrade:true};
@@ -180,7 +180,7 @@ function renderInteractionsList(interactions, sk, index) {
     const lp=findLeaderByEmail(int.leaderEmail);
     return '<div class="int-item">'+
       '<div class="int-header">'+
-        '<div class="int-av">'+initials(int.leader)+(lp&&lp.photoUrl?'<img src="'+esc((driveThumb(lp.photoUrl)||lp.photoUrl))+'" alt="" onerror="this.style.display=\\'none\\'">':'')+'</div>'+
+        '<div class="int-av">'+initials(int.leader)+(lp&&lp.photoUrl?'<img src="'+esc(lp.photoUrl)+'" alt="" onerror="this.style.display=\\'none\\'">':'')+'</div>'+
         '<div><div class="int-who">'+esc(int.leader||'Someone')+editedTag+'</div><div class="int-when">'+formatDate(int.date)+' · '+timeAgo(int.createdAt)+'</div></div>'+
       '</div>'+
       '<div class="int-body">'+esc(int.summary)+'</div>'+
@@ -254,7 +254,7 @@ function renderNotesList(notes, sk, index) {
     const lp = findLeaderByEmail(n.leaderEmail);
     const head =
       '<div class="int-header">'+
-        '<div class="int-av">'+initials(n.leader||'?')+(lp&&lp.photoUrl?'<img src="'+esc((driveThumb(lp.photoUrl)||lp.photoUrl))+'" alt="" onerror="this.style.display=\\'none\\'">':'')+'</div>'+
+        '<div class="int-av">'+initials(n.leader||'?')+(lp&&lp.photoUrl?'<img src="'+esc(lp.photoUrl)+'" alt="" onerror="this.style.display=\\'none\\'">':'')+'</div>'+
         '<div><div class="int-who">'+esc(n.leader||'Someone')+editedTag+'</div>'+
         '<div class="int-when">'+(timeAgo(n.createdAt)||formatDate(n.createdAt))+'</div></div>'+
       '</div>';

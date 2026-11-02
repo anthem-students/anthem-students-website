@@ -40,10 +40,10 @@ async function loadActivityFeed() {
       // A removed student has nothing to navigate to — don't offer a click
       // that silently does nothing.
       const canNavigate=!!student;
-      const sThumb=student?driveThumb(student.photoUrl):null;
+      const sThumb=student?student.photoUrl||null:null;
       const leaderName=item.leader||'Someone';
       const lp=findLeaderByEmail(item.leaderEmail);
-      const leaderThumb=lp&&lp.photoUrl?(driveThumb(lp.photoUrl)||lp.photoUrl):null;
+      const leaderThumb=lp&&lp.photoUrl?lp.photoUrl:null;
       const sg=GRADIENTS[0], lg=GRADIENTS[2];
       const {names, summary}=activityCopy(item, leaderName);
       const clickAttrs=canNavigate

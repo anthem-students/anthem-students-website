@@ -139,7 +139,7 @@ function paintProfileAvatar() {
   if (!currentUser) return;
   const has=!!currentUser.photoUrl;
   const img=document.getElementById('profile-av-img');
-  const thumb=driveThumb(currentUser.photoUrl);
+  const thumb=currentUser.photoUrl||null;
   if(img){
     if(thumb){
       img.dataset.crop=currentUser.photoCrop?JSON.stringify(currentUser.photoCrop):'';

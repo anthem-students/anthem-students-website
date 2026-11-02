@@ -48,7 +48,7 @@ One row per student, primary key `(sk, id)`:
 | `birthday` | `YYYY-MM-DD`, or older free text |
 | `status` | `core` \| `loose` \| `fringe` — the Connection Status dropdown |
 | `connected`, `last_connected` | Parent-connection flag and the most recent date. The full history is in `connections:` below. The card's "Needs Connection" state is *derived*: a connection older than the reset window in Settings. |
-| `photo_url`, `thumb_url` | Public Storage URLs. Some older rows have Google Drive links, which the client converts (`driveThumb`). |
+| `photo_url`, `thumb_url` | Public Storage URLs. |
 | `notes` | The pinned "standing note" (allergies, family situation). Running notes are in `notes:` below. |
 | `row_index` | Display order |
 

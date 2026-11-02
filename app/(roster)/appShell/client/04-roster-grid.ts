@@ -223,7 +223,7 @@ function makeCard(person, idx, sk) {
   // person.thumbUrl is a small copy in Supabase Storage — paint that first
   // when it's there, and quietly upgrade to the full photo once it's loaded,
   // below. A student with no thumb just gets the full image directly.
-  const fullThumb = driveThumb(person.photoUrl);
+  const fullThumb = person.photoUrl||null;
   const thumb = person.thumbUrl || fullThumb;
   const age = calcAge(person.birthday);
 
@@ -295,7 +295,7 @@ function makeCard(person, idx, sk) {
       cardImg.onload = () => { cardImg.classList.add('loaded'); applyCropToImg(cardImg, person.photoCrop); };
       // Started from the low-res thumb — preload the full-res photo
       // off-screen and swap once it's actually ready, so the card never
-      // regresses to a slower/broken image if Drive is having a bad moment.
+      // regresses to a blank image while the full photo loads.
       if (person.thumbUrl && fullThumb && fullThumb !== thumb) {
         const upgrade = new Image();
         upgrade.onload = () => { cardImg.src = fullThumb; };

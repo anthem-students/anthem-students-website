@@ -53,7 +53,7 @@ async function loadAdminUsers() {
       const leaderDisabled=(isSelf||isAdmin)?'disabled':'';
       const avatarHtml='<div class="admin-user-avatar" data-email="'+esc(u.email)+'" onclick="openAdminUserPhotoEditor(this.dataset.email)" title="'+(u.photoUrl?'Change photo':'Add photo')+'">'+
         (u.photoUrl
-          ? '<img src="'+esc((driveThumb(u.photoUrl)||u.photoUrl))+'" alt="" onerror="this.style.display=\\'none\\'">'
+          ? '<img src="'+esc(u.photoUrl)+'" alt="" onerror="this.style.display=\\'none\\'">'
           : '<div class="av-fallback" style="background:'+GRADIENTS[i % GRADIENTS.length]+'">'+initials(u.name)+'</div>')+
         '<div class="admin-user-avatar-overlay">📷</div>'+
       '</div>';

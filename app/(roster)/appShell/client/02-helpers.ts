@@ -1,4 +1,4 @@
-// Small formatting helpers (dates, ages, Drive thumbnails), screen switching and the main nav panels.
+// Small formatting helpers (dates, ages), screen switching and the main nav panels.
 // Part of the roster's client script; see ./index.ts.
 export const HELPERS = `// ── HELPERS ─────────────────────────────────────────────────
 // Escape anything a person typed (names, notes, schools…) before it goes into
@@ -12,31 +12,6 @@ function esc(v) {
 }
 function initials(n) {
   return (n||'?').trim().split(/\\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
-}
-// w defaults to a normal display size; the crop editor asks for a much larger
-// w so there's real pixel headroom to zoom into. Deliberately aspect-preserving
-// (sz=w{w} alone) rather than the old "w200-h200-c", which asked Drive to
-// center-crop to a square BEFORE the browser ever sees it — that silently
-// destroyed the parts of a non-square photo the crop-metadata feature needs
-// to still be there to pan/zoom into.
-function driveThumb(url, w) {
-  if (!url) return null;
-  const raw = String(url).trim();
-  const size = w || 400;
-
-  // Direct Google-hosted image URLs are served as-is.
-  if (/^https?:\\/\\//.test(raw) && raw.includes('googleusercontent.com')) return raw;
-
-  const mPath = raw.match(/\\/d\\/([a-zA-Z0-9_-]+)/);
-  if (mPath) return 'https://drive.google.com/thumbnail?id=' + mPath[1] + '&sz=w' + size;
-
-  try {
-    const u = new URL(raw);
-    const id = u.searchParams.get('id');
-    if (id) return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + size;
-  } catch (_) {}
-
-  return /^https?:\\/\\//.test(raw) ? raw : null;
 }
 // A bare YYYY-MM-DD parses as UTC midnight and then renders one day earlier in
 // any timezone behind UTC, so birthdays would read a day off. Build those as a

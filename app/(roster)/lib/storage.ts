@@ -4,8 +4,7 @@ import { supabaseAdmin } from "./supabaseAdmin";
 // public URL is stored on the student or leader: student photos under
 // students/, leader photos under photos/, the org logo at the top level.
 // Student uploads can carry a small client-made thumbnail, stored in
-// roster-thumbs for the grid's first paint. Some older students still have
-// Google Drive photo links; the client handles those (driveThumb).
+// roster-thumbs for the grid's first paint.
 export async function uploadPhotoToStorage(
   file: File,
   type: "leader" | "logo" | "student",
@@ -55,7 +54,7 @@ function extFor(mimeType: string): string {
 
 // Removes a photo or thumbnail this app uploaded, once nothing points at it
 // any more. Only ever touches objects under photos/ or students/ in our two
-// buckets — a Drive link, a logo or someone else's URL is left alone.
+// buckets — a logo or someone else's URL is left alone.
 // Best-effort: a leftover file costs a few KB, a thrown error here would fail
 // the save that replaced it.
 export async function deleteStoredPhoto(url: string | null | undefined): Promise<void> {

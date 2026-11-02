@@ -38,9 +38,9 @@ function onSharedPhotoSelected(input) {
   reader.readAsDataURL(file);
 }
 
-// Re-opens the crop editor on a photo that's already uploaded (Drive or
-// Supabase Storage), so a leader can fix the crop without picking a new
-// file. Loads the display-sized thumbnail directly — no more canvas pixel
+// Re-opens the crop editor on a photo that's already uploaded to
+// Supabase Storage, so a leader can fix the crop without picking a new
+// file. Loads the stored photo directly — no more canvas pixel
 // readback happens anywhere in this flow, so there's nothing left that a
 // missing CORS header could taint.
 function loadExistingCropImage(url) {
@@ -58,7 +58,7 @@ function loadExistingCropImage(url) {
     zoomEl.max=cropZoomBounds().max; zoomEl.value=1;
   };
   img.onerror=()=>showToast('Could not load photo for editing','error');
-  img.src=driveThumb(url,1600)||url;
+  img.src=url;
 }
 
 function setCropReplaceRowVisible(visible) {

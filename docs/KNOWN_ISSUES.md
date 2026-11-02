@@ -18,5 +18,4 @@ These were found during the November 2026 audit and deliberately left alone. Eac
 ## Code health
 
 - **The client is untyped and has no tests.** `npm run check:client` catches syntax errors only. If this tool stays in active development, the highest-value next step is a small Playwright smoke test that signs in against a non-production Supabase project and opens a student.
-- **Some students still have Google Drive photo links** from the spreadsheet days. They display through Drive's thumbnail endpoint, which is slower and can break if a file's sharing changes. Re-uploading those photos moves them into Storage.
 - **The permission matrix isn't editable in the UI.** Change the defaults in `lib/settings.ts`.

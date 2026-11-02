@@ -63,7 +63,7 @@ function mentorDirectory() {
 function mentorAvatarHtml(m) {
   const name = mentorName(m);
   const l = m && m.email ? findLeaderByEmail(m.email) : null;
-  const thumb = l && l.photoUrl ? (driveThumb(l.photoUrl) || l.photoUrl) : null;
+  const thumb = l && l.photoUrl ? l.photoUrl : null;
   const g = GRADIENTS[((name.charCodeAt(0)||0) + name.length) % GRADIENTS.length];
   return '<span class="m-av"><span class="av-fallback" style="background:'+g+'">'+esc(initials(name))+'</span>'+
     (thumb ? '<img src="'+esc(thumb)+'" alt="" data-leader-email="'+esc(l.email)+'" onerror="this.style.display=\\'none\\'">' : '')+

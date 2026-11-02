@@ -250,7 +250,7 @@ function updateNav() {
     }
     const adminlandBtn = currentUser.role==='admin'
       ? '<button class=\"nav-btn\" onclick=\"openAdminland()\">Adminland</button>' : '';
-    const thumb = driveThumb(currentUser.photoUrl);
+    const thumb = currentUser.photoUrl||null;
     const avatarInner = thumb
       ? '<img class=\"nav-avatar-img\" src=\"'+esc(thumb)+'\" alt=\"'+esc(currentUser.name||'User')+'\" onerror=\"this.style.display=\\'none\\';this.parentElement.classList.remove(\\'has-photo\\')\">'
       : initials(currentUser.name);

@@ -1,10 +1,11 @@
 import { supabaseAdmin } from "./supabaseAdmin";
 
-// Replaces the original R2 bucket. Uploads go straight to a public Supabase
-// Storage bucket and we hand back the public URL directly — no need to port
-// the original's "/r2/<key>" proxy route. Student photos (which used to go to
-// Google Drive) land under students/, with an optional small thumbnail in
-// roster-thumbs for the grid's first paint.
+// Photo uploads go to the public Supabase Storage bucket roster-photos and the
+// public URL is stored on the student or leader: student photos under
+// students/, leader photos under photos/, the org logo at the top level.
+// Student uploads can carry a small client-made thumbnail, stored in
+// roster-thumbs for the grid's first paint. Some older students still have
+// Google Drive photo links; the client handles those (driveThumb).
 export async function uploadPhotoToStorage(
   file: File,
   type: "leader" | "logo" | "student",

@@ -35,23 +35,35 @@ export async function kvDelete(key: string): Promise<void> {
   await supabaseAdmin().from("roster_kv").delete().eq("key", key);
 }
 
-// Every live row under a prefix, keys and values together, in one query.
-// Prefer this to looping kvGet over a list of keys — that costs a round trip
-// per row, which on the activity log is hundreds.
+// Every live row under a prefix, keys and values together. Prefer this to
+// looping kvGet over a list of keys — that costs a round trip per row, which
+// on the activity log is hundreds. Fetched in pages because the Supabase API
+// returns at most 1,000 rows per request (max_rows in supabase/config.toml).
+const PAGE = 1000;
+
 export async function kvEntries<T = unknown>(
   prefix: string,
   opts: { newestFirst?: boolean; limit?: number } = {}
 ): Promise<{ key: string; value: T }[]> {
-  let query = supabaseAdmin()
-    .from("roster_kv")
-    .select("key, value")
-    .like("key", `${prefix}%`)
-    .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
-    .order("key", { ascending: !opts.newestFirst });
-  if (opts.limit) query = query.limit(opts.limit);
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data || []).map((row) => ({ key: row.key as string, value: row.value as T }));
+  const now = new Date().toISOString();
+  const want = opts.limit ?? Infinity;
+  const rows: { key: string; value: T }[] = [];
+  while (rows.length < want) {
+    const from = rows.length;
+    const to = from + Math.min(PAGE, want - from) - 1;
+    const { data, error } = await supabaseAdmin()
+      .from("roster_kv")
+      .select("key, value")
+      .like("key", `${prefix}%`)
+      // The timestamp is quoted: ":" is reserved inside a PostgREST or() filter.
+      .or(`expires_at.is.null,expires_at.gte."${now}"`)
+      .order("key", { ascending: !opts.newestFirst })
+      .range(from, to);
+    if (error) throw new Error(error.message);
+    for (const row of data || []) rows.push({ key: row.key as string, value: row.value as T });
+    if (!data || data.length < to - from + 1) break;
+  }
+  return rows;
 }
 
 // The same rows as a map keyed by whatever follows the prefix — e.g. every

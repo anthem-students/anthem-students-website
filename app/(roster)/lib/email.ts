@@ -1,9 +1,8 @@
-// The original app sent email via Cloudflare MailChannels, which only
-// authenticates requests originating from a Cloudflare Worker on Cloudflare's
-// own network — it will not work from this Next.js host. Swapped for Resend,
-// which needs its own API key. Set RESEND_API_KEY (and optionally
-// ROSTER_EMAIL_FROM) in your environment; until then this logs and no-ops,
-// matching the original's swallow-and-return-false behavior on failure.
+// Transactional email through Resend (resend.com): password resets, leader
+// access requests and approvals. Set RESEND_API_KEY and ROSTER_EMAIL_FROM
+// (a sender on a domain verified in Resend). Without the key nothing is sent —
+// the message is logged to the server console instead, links included, so
+// the reset and approval flows can still be tested locally.
 
 // Shared shell for the transactional mail so the four messages the app sends
 // look like they came from the same app. Table-based and inline-styled on

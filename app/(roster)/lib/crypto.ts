@@ -1,6 +1,6 @@
-// Ported unchanged from the original Worker — all Web Crypto (crypto.subtle,
-// crypto.getRandomValues), which is a global standard available in both the
-// Node.js runtime here and the original Workers runtime.
+// Password hashing (PBKDF2-SHA256, 100k iterations, random salt) and token
+// helpers, all on the standard Web Crypto API. Session, reset and approval
+// tokens are random 32-byte hex strings; only their SHA-256 hash is stored.
 
 export function hashToken(token: string): Promise<string> {
   return crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)).then((buf) =>
@@ -43,7 +43,7 @@ export function describePasswordProblem(password = ""): string | null {
   return password ? null : "Enter a password.";
 }
 
-// Constant-time-ish string comparison (matches the original's approach).
+// Constant-time-ish string comparison, for checking the shared passcode.
 export function timingSafeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
   const bufA = enc.encode(a.padEnd(128));

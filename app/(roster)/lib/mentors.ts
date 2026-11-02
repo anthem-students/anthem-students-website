@@ -1,9 +1,5 @@
-import { logActivity } from "./activity";
-import type { RosterUser } from "./auth";
-
 // A student's primary (and optional secondary) mentor. Lives in roster_kv
-// under `mentors:{sk}:{id}`, keyed by the stable sheet ID like goals are — the
-// sheet has no column for it and doesn't need one.
+// under `mentors:{sk}:{id}`.
 //
 // A mentor is either an app leader (email set — the client resolves name and
 // photo from the leader directory, so a renamed leader updates everywhere) or
@@ -19,11 +15,6 @@ export type StudentMentors = {
 export type MentorSlot = "primary" | "secondary";
 
 export const MENTOR_SLOTS: MentorSlot[] = ["primary", "secondary"];
-
-export function mentorKvKey(sk: unknown, id: unknown): string | null {
-  if ((sk !== "hs" && sk !== "ms") || typeof id !== "string" || !id) return null;
-  return `mentors:${sk}:${id}`;
-}
 
 // Returns a cleaned mentor, null for "no mentor", or undefined when the input
 // is malformed and the request should be rejected.
@@ -48,9 +39,10 @@ export function sameMentor(a: Mentor | null | undefined, b: Mentor | null | unde
   return !!a && !!b && mentorIdentity(a) === mentorIdentity(b);
 }
 
-export async function logMentorActivity(
-  user: RosterUser,
-  item: { type: "mentor_changed" | "mentor_bulk"; summary: string; studentName?: string; sk?: string; id?: string }
-) {
-  await logActivity(user, item);
+// Applies one slot change to a student's pair and keeps the pair tidy: the
+// same person can't hold both slots, and a lone secondary becomes primary.
+export function tidyMentors(primary: Mentor | null, secondary: Mentor | null): { primary: Mentor | null; secondary: Mentor | null } {
+  if (sameMentor(primary, secondary)) secondary = null;
+  if (!primary && secondary) [primary, secondary] = [secondary, null];
+  return { primary, secondary };
 }

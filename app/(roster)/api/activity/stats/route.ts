@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { kvGet, kvList } from "../../../lib/kv";
+import { kvEntries } from "../../../lib/kv";
 import { requirePermission } from "../../../lib/auth";
+import { ACTIVITY_PREFIX, type ActivityItem } from "../../../lib/activity";
 
-type ActivityItem = { type?: string; leader?: string; studentName?: string; sk?: string; date?: string; createdAt: string };
-
-// Activity records carry a 90-day TTL (see api/student/interactions), so every
+// Activity records carry a 90-day TTL (see lib/activity), so every
 // time-based number here describes a rolling 90-day window, not all time. The
 // dashboard says so on the cards that use them. All-time hangout totals come
 // from the untrimmed interactions store instead, summed on the client.
@@ -30,7 +29,7 @@ export async function GET() {
   const perm = await requirePermission("activity", "view");
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
-  const list = await kvList("activity:");
+  const rows = await kvEntries<ActivityItem>(ACTIVITY_PREFIX);
   const leaderCounts: Record<string, number> = {};
   const studentCounts: Record<string, number> = {};
   const perDay: Record<string, number> = {};
@@ -46,9 +45,7 @@ export async function GET() {
   let earliest: number | null = null;
   let totalHangouts = 0;
 
-  for (const key of list.keys) {
-    const item = await kvGet<ActivityItem>(key.name);
-    if (!item) continue;
+  for (const { value: item } of rows) {
     // This dashboard is specifically about hangouts — the activity: prefix
     // now also carries connections, notes, and roster edits (see the Activity
     // tab), so skip everything but hangouts here. A missing `type` is a

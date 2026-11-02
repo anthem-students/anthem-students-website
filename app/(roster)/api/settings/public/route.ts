@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { kvGet } from "../../../lib/kv";
-import { DEFAULT_ROSTER_SETTINGS, SETTINGS_KEY } from "../../../lib/settings";
+import { DEFAULT_ROSTER_SETTINGS, deepMerge, SETTINGS_KEY } from "../../../lib/settings";
 
-// No auth — used for branding on the passcode/login gate screen.
+// No auth: the sign-in gate needs the branding before anyone is signed in.
+// Only display settings go out — never the passcode or request emails.
 export async function GET() {
-  const stored = await kvGet(SETTINGS_KEY);
-  const s = { ...DEFAULT_ROSTER_SETTINGS, ...(stored as typeof DEFAULT_ROSTER_SETTINGS) };
+  const stored = (await kvGet<object>(SETTINGS_KEY)) || {};
+  const s = deepMerge(DEFAULT_ROSTER_SETTINGS, stored) as typeof DEFAULT_ROSTER_SETTINGS;
   return NextResponse.json({
     ministryName: s.ministryName,
     campus: s.campus,

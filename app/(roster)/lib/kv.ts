@@ -1,9 +1,11 @@
 import { supabaseAdmin } from "./supabaseAdmin";
 
-// Mirrors Cloudflare KV's get/put/delete/list(prefix) semantics on top of
-// the roster_kv Postgres table, so the app's original key-value access
-// patterns (user:, session:, settings:org, interactions:, activity:,
-// invite:, onboard:, pwdreset:, audit:, metric:) port over unchanged.
+// A small key-value store on top of the roster_kv Postgres table. Everything
+// that isn't a student row lives here under a prefixed key (user:, session:,
+// settings:org, goals:, notes:, interactions:, connections:, mentors:,
+// apprentice:, photoCrop:, activity:, pwdreset:, signupAction:, audit:,
+// metric:, ratelimit:) — docs/ARCHITECTURE.md lists what each one holds.
+//
 // Expiry is lazy (checked on read) rather than a background sweep — an
 // expired row just reads back as absent.
 
@@ -33,30 +35,48 @@ export async function kvDelete(key: string): Promise<void> {
   await supabaseAdmin().from("roster_kv").delete().eq("key", key);
 }
 
-export async function kvList(prefix: string): Promise<{ keys: { name: string }[] }> {
-  const { data, error } = await supabaseAdmin()
+// Every live row under a prefix, keys and values together, in one query.
+// Prefer this to looping kvGet over a list of keys — that costs a round trip
+// per row, which on the activity log is hundreds.
+export async function kvEntries<T = unknown>(
+  prefix: string,
+  opts: { newestFirst?: boolean; limit?: number } = {}
+): Promise<{ key: string; value: T }[]> {
+  let query = supabaseAdmin()
     .from("roster_kv")
-    .select("key, expires_at")
+    .select("key, value")
     .like("key", `${prefix}%`)
-    .order("key", { ascending: true });
-  if (error || !data) return { keys: [] };
-  const now = Date.now();
-  const keys = data
-    .filter((row) => !row.expires_at || new Date(row.expires_at).getTime() >= now)
-    .map((row) => ({ name: row.key as string }));
-  return { keys };
+    .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
+    .order("key", { ascending: !opts.newestFirst });
+  if (opts.limit) query = query.limit(opts.limit);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data || []).map((row) => ({ key: row.key as string, value: row.value as T }));
 }
 
-// Every "give me every student's X for this tab" endpoint (goals,
-// interactions, notes, connections, photo crops) does this same
-// list-then-fetch-each dance. Shared here so the bootstrap route can call it
-// directly instead of five separate HTTP round trips back into itself.
-export async function kvGetMap<T = unknown>(prefix: string): Promise<Record<string, T | null>> {
-  const { keys } = await kvList(prefix);
-  const entries = await Promise.all(
-    keys.map(async ({ name }) => [name.slice(prefix.length), await kvGet<T>(name)] as const)
-  );
-  return Object.fromEntries(entries);
+// The same rows as a map keyed by whatever follows the prefix — e.g. every
+// student's goals for a tab as { [studentId]: goals }.
+export async function kvGetMap<T = unknown>(prefix: string): Promise<Record<string, T>> {
+  const rows = await kvEntries<T>(prefix);
+  return Object.fromEntries(rows.map(({ key, value }) => [key.slice(prefix.length), value]));
+}
+
+// Many non-expiring writes in one query. A key listed twice keeps its last
+// value (Postgres rejects an upsert that touches the same row twice).
+export async function kvPutMany(rows: { key: string; value: unknown }[]): Promise<void> {
+  const byKey = new Map(rows.map((r) => [r.key, r.value]));
+  if (!byKey.size) return;
+  const updated_at = new Date().toISOString();
+  const { error } = await supabaseAdmin()
+    .from("roster_kv")
+    .upsert([...byKey].map(([key, value]) => ({ key, value, expires_at: null, updated_at })));
+  if (error) throw new Error(error.message);
+}
+
+export async function kvDeleteMany(keys: string[]): Promise<void> {
+  if (!keys.length) return;
+  const { error } = await supabaseAdmin().from("roster_kv").delete().in("key", keys);
+  if (error) throw new Error(error.message);
 }
 
 export async function trackMetric(type: string): Promise<void> {
@@ -67,6 +87,6 @@ export async function trackMetric(type: string): Promise<void> {
     val.count++;
     await kvPut(key, val, 90 * 24 * 60 * 60);
   } catch {
-    // best-effort metric, matches original's silent catch
+    // Best-effort; a missed page-view count must never fail a request.
   }
 }

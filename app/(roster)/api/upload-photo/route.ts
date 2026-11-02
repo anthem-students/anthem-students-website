@@ -33,6 +33,10 @@ export async function POST(request: Request) {
     if (type === "student" && !(await hasPermission(user, "roster", "edit"))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    // The logo shows on everyone's sign-in screen; only admins set it.
+    if (type === "logo" && user.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const thumb = type === "student" ? formData.get("thumb") : null;
     const { url, thumbUrl, logoTone } = await uploadPhotoToStorage(file, type, thumb instanceof File ? thumb : null);
     return NextResponse.json({ url, thumbUrl, logoTone });

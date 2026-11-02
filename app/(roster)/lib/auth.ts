@@ -1,9 +1,10 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { kvDelete, kvGet, kvList } from "./kv";
+import { kvDelete, kvEntries, kvGet } from "./kv";
+import { DEFAULT_ROSTER_SETTINGS, SETTINGS_KEY } from "./settings";
 
 export const SESSION_COOKIE_NAME = "asm_session";
-export const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days, matches original
+export const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days
 
 export type RosterUser = {
   name: string;
@@ -69,42 +70,63 @@ export const getSessionUser = cache(async (): Promise<RosterUser | null> => {
 });
 
 export const PERMISSION_LEVELS: Record<string, number> = { none: 0, view: 1, edit: 2, admin: 3 };
+
+// Fallback level for a role the matrix doesn't mention for some module.
 export const ROLE_DEFAULTS: Record<string, string> = {
   pending: "view",
   approved: "edit",
   leader: "edit",
   admin: "admin",
-  viewer: "view",
 };
 
-const DEFAULT_MODULES: Record<string, Record<string, string>> = {
-  roster: { pending: "view", approved: "edit", leader: "edit", admin: "admin" },
-  activity: { pending: "view", approved: "view", leader: "edit", admin: "admin" },
-  brainDump: { pending: "none", approved: "edit", leader: "edit", admin: "admin" },
-  attendance: { pending: "view", approved: "edit", leader: "edit", admin: "admin" },
-  hangoutNotes: { pending: "none", approved: "edit", leader: "edit", admin: "admin" },
-  adminland: { pending: "none", approved: "none", leader: "none", admin: "admin" },
-  dashboard: { pending: "view", approved: "view", leader: "view", admin: "admin" },
+type OrgSettings = {
+  permissions?: { modules?: Record<string, Record<string, string>> };
+  access?: { passcodePermissions?: Record<string, boolean> };
 };
 
+const loadSettings = cache(async () => (await kvGet<OrgSettings>(SETTINGS_KEY)) || {});
+
+// The role x module matrix: the defaults in lib/settings.ts with any
+// overrides saved in settings:org laid on top. There's no UI for editing it;
+// change the defaults in lib/settings.ts.
 export const getPermissionMatrix = cache(async (): Promise<Record<string, Record<string, string>>> => {
-  const settings = await kvGet<{ permissions?: { modules?: Record<string, Record<string, string>> } }>(
-    "settings:org"
-  );
-  const matrix = settings?.permissions?.modules || {};
+  const saved = (await loadSettings()).permissions?.modules || {};
   const merged: Record<string, Record<string, string>> = {};
-  for (const [module, defaults] of Object.entries(DEFAULT_MODULES)) {
-    merged[module] = { ...defaults, ...(matrix[module] || {}) };
+  for (const [module, defaults] of Object.entries(DEFAULT_ROSTER_SETTINGS.permissions.modules)) {
+    merged[module] = { ...defaults, ...(saved[module] || {}) };
   }
   return merged;
 });
 
+// A passcode session is read-only, and what it may read is set by the "View
+// only" checkboxes in Settings -> Access, not by the role matrix. Notes and
+// hangouts are off unless an admin turns them on — the Activity feed quotes
+// them, so it follows the same switch.
+async function viewerLevel(module: string): Promise<string> {
+  const p = {
+    ...DEFAULT_ROSTER_SETTINGS.access.passcodePermissions,
+    ...((await loadSettings()).access?.passcodePermissions || {}),
+  };
+  const allowed: Record<string, boolean> = {
+    roster: p.viewRoster,
+    dashboard: p.viewRoster,
+    hangoutNotes: p.viewNotes,
+    activity: p.viewNotes,
+  };
+  return allowed[module] ? "view" : "none";
+}
+
 export async function hasPermission(user: RosterUser | null, module: string, level = "view"): Promise<boolean> {
   if (!user) return false;
   if (user.role === "admin") return true;
-  const matrix = await getPermissionMatrix();
-  const role = user.role || "pending";
-  const userLevel = matrix[module]?.[role] || ROLE_DEFAULTS[role] || "none";
+  let userLevel: string;
+  if (user.role === "viewer") {
+    userLevel = await viewerLevel(module);
+  } else {
+    const role = user.role || "pending";
+    const matrix = await getPermissionMatrix();
+    userLevel = matrix[module]?.[role] || ROLE_DEFAULTS[role] || "none";
+  }
   return (PERMISSION_LEVELS[userLevel] || 0) >= (PERMISSION_LEVELS[level] || 0);
 }
 
@@ -128,12 +150,8 @@ export async function requireAdmin(): Promise<{ ok: true; user: RosterUser } | {
 }
 
 export async function listAdmins(): Promise<{ email: string }[]> {
-  const list = await kvList("user:");
-  const admins: { email: string }[] = [];
-  for (const key of list.keys) {
-    const u = await kvGet<RosterUser>(key.name);
-    if (u?.role === "admin" && u.email) admins.push({ email: u.email });
-  }
+  const users = await kvEntries<RosterUser>("user:");
+  const admins = users.filter(({ value: u }) => u?.role === "admin" && u.email).map(({ value: u }) => ({ email: u.email! }));
   if (!admins.length && process.env.ADMIN_EMAIL) admins.push({ email: process.env.ADMIN_EMAIL });
   return admins;
 }
@@ -141,7 +159,7 @@ export async function listAdmins(): Promise<{ email: string }[]> {
 // Who gets the "someone is requesting leader access" email. Settings →
 // Access can name specific addresses; left blank it goes to every admin.
 export async function accessRequestRecipients(): Promise<{ email: string }[]> {
-  const settings = await kvGet<{ access?: { requestEmails?: string } }>("settings:org");
+  const settings = await kvGet<{ access?: { requestEmails?: string } }>(SETTINGS_KEY);
   const configured = parseEmailList(settings?.access?.requestEmails);
   return configured.length ? configured.map((email) => ({ email })) : listAdmins();
 }

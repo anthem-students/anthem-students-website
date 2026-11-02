@@ -7,8 +7,8 @@ export async function GET() {
   const admin = await requireAdmin();
   if (!admin.ok) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
 
-  const stored = await kvGet(SETTINGS_KEY);
-  const settings = { ...DEFAULT_ROSTER_SETTINGS, ...(stored as object) };
+  const stored = (await kvGet<object>(SETTINGS_KEY)) || {};
+  const settings = deepMerge(DEFAULT_ROSTER_SETTINGS, stored);
   return NextResponse.json({ settings });
 }
 

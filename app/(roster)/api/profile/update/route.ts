@@ -15,7 +15,9 @@ export async function POST(request: Request) {
   // photoUrl "" removes the photo; undefined leaves it alone.
   const previousPhoto = user.photoUrl || "";
   if (updates.photoUrl !== undefined) {
-    if (typeof updates.photoUrl !== "string") return NextResponse.json({ error: "Invalid photo" }, { status: 400 });
+    if (typeof updates.photoUrl !== "string" || (updates.photoUrl && !/^https:\/\//.test(updates.photoUrl))) {
+      return NextResponse.json({ error: "Invalid photo" }, { status: 400 });
+    }
     user.photoUrl = updates.photoUrl;
     if (!updates.photoUrl) user.photoCrop = null;
   }

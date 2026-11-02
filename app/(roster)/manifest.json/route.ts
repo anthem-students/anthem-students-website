@@ -1,6 +1,10 @@
 import { kvGet } from "../lib/kv";
 import { SETTINGS_KEY } from "../lib/settings";
 
+// Read from settings on every request (cached an hour by the browser), not
+// baked in at build time, so a newly uploaded logo shows up.
+export const dynamic = "force-dynamic";
+
 // The roster's own mark, used unless an org has uploaded a logo in settings.
 const FALLBACK_ICONS = [
   { src: "/roster-icon-192.png", sizes: "192x192", type: "image/png" },

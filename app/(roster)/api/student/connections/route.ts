@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { kvGet, kvList, kvPut } from "../../../lib/kv";
+import { kvGet, kvPut } from "../../../lib/kv";
 import { requirePermission } from "../../../lib/auth";
+import { logActivity } from "../../../lib/activity";
+import { studentKey } from "../../../lib/rosterSchema";
 
 // Every time a leader connects with a student's family, a dated row lands here.
 //
 // roster_students.last_connected only ever holds the most recent one (stamped
 // on an OFF -> ON flip by api/students/write); this store keeps the full log
-// behind it, so a leader can see and correct the individual days.
-//
-// Keyed by the student's stable sheet ID (column K), never by row position —
-// see the note in ../notes/route.ts for what happened the two times a store
-// here was keyed by index instead.
+// behind it, so a leader can see and correct the individual days. Stored under
+// `connections:{sk}:{id}`; the grid's latest-date-per-student comes from
+// /api/bootstrap.
 
 export type Connection = {
   id: string;
@@ -21,10 +21,6 @@ export type Connection = {
   createdAt?: string;
   updatedAt?: string;
 };
-
-function keyFor(sk: string, id: string): string {
-  return `connections:${sk}:${id}`;
-}
 
 // The log is the authority on "when was the last connection", so this is what
 // the roster reads back after every write. Dates are YYYY-MM-DD, which sorts
@@ -53,26 +49,10 @@ export async function GET(request: Request) {
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
   const url = new URL(request.url);
-  const sk = url.searchParams.get("sk");
-  const id = url.searchParams.get("id");
-  if (!sk) return NextResponse.json({ error: "sk is required" }, { status: 400 });
+  const kvKey = studentKey("connections", url.searchParams.get("sk"), url.searchParams.get("id"));
+  if (!kvKey) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
 
-  // No id: an id -> latest-date map for the whole tab, asked once per tab on
-  // load. The roster needs every student's last connection date to work out
-  // who has gone stale, and one request per card would be 60+ of them.
-  if (!id) {
-    const prefix = `connections:${sk}:`;
-    const { keys } = await kvList(prefix);
-    const entries = await Promise.all(
-      keys.map(async ({ name }) => {
-        const list = (await kvGet<Connection[]>(name)) || [];
-        return [name.slice(prefix.length), { latest: latestDate(list), count: list.length }] as const;
-      })
-    );
-    return NextResponse.json({ latest: Object.fromEntries(entries) });
-  }
-
-  const data = (await kvGet<Connection[]>(keyFor(sk, id))) || [];
+  const data = (await kvGet<Connection[]>(kvKey)) || [];
   return NextResponse.json({ connections: sorted(data), latest: latestDate(data) });
 }
 
@@ -82,8 +62,8 @@ export async function POST(request: Request) {
   const user = perm.user;
 
   const body = await request.json();
-  const { sk, id } = body;
-  if (!sk || !id) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
+  const kvKey = studentKey("connections", body.sk, body.id);
+  if (!kvKey) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
 
   const date = readDate(body.date);
   if (!date) return NextResponse.json({ error: "A connection needs a valid date" }, { status: 400 });
@@ -91,7 +71,7 @@ export async function POST(request: Request) {
   const connection: Connection = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     date,
-    note: typeof body.note === "string" ? body.note.trim() : "",
+    note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "",
     // Taken from the session, never from the body — this is a record of who
     // actually made the contact.
     leader: user.name || "Someone",
@@ -99,20 +79,18 @@ export async function POST(request: Request) {
     createdAt: new Date().toISOString(),
   };
 
-  const kvKey = keyFor(sk, id);
   const existing = (await kvGet<Connection[]>(kvKey)) || [];
   existing.push(connection);
   await kvPut(kvKey, existing);
 
-  // Same flat, timestamp-keyed log the hangout feed writes to (see
-  // api/student/interactions) — the Activity tab reads across every type.
-  const studentName = typeof body.studentName === "string" ? body.studentName : "";
-  const actKey = `activity:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
-  await kvPut(
-    actKey,
-    { type: "connection", leader: connection.leader, leaderEmail: connection.leaderEmail, date: connection.date, summary: connection.note || "", studentName, sk, id, createdAt: connection.createdAt },
-    90 * 24 * 60 * 60
-  );
+  await logActivity(user, {
+    type: "connection",
+    date: connection.date,
+    summary: connection.note || "",
+    studentName: typeof body.studentName === "string" ? body.studentName : "",
+    sk: body.sk,
+    id: body.id,
+  });
 
   return NextResponse.json({ success: true, connection, latest: latestDate(existing) });
 }
@@ -125,15 +103,15 @@ export async function PUT(request: Request) {
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
   const body = await request.json();
-  const { sk, id, connectionId } = body;
-  if (!sk || !id || !connectionId) {
+  const { connectionId } = body;
+  const kvKey = studentKey("connections", body.sk, body.id);
+  if (!kvKey || !connectionId) {
     return NextResponse.json({ error: "sk, id and connectionId are required" }, { status: 400 });
   }
 
   const date = readDate(body.date);
   if (!date) return NextResponse.json({ error: "A connection needs a valid date" }, { status: 400 });
 
-  const kvKey = keyFor(sk, id);
   const existing = (await kvGet<Connection[]>(kvKey)) || [];
   const index = existing.findIndex((c) => c.id === connectionId);
   if (index === -1) return NextResponse.json({ error: "Connection not found" }, { status: 404 });
@@ -141,7 +119,7 @@ export async function PUT(request: Request) {
   existing[index] = {
     ...existing[index],
     date,
-    note: typeof body.note === "string" ? body.note.trim() : existing[index].note || "",
+    note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) : existing[index].note || "",
     updatedAt: new Date().toISOString(),
   };
   await kvPut(kvKey, existing);
@@ -154,12 +132,12 @@ export async function DELETE(request: Request) {
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
   const body = await request.json();
-  const { sk, id, connectionId } = body;
-  if (!sk || !id || !connectionId) {
+  const { connectionId } = body;
+  const kvKey = studentKey("connections", body.sk, body.id);
+  if (!kvKey || !connectionId) {
     return NextResponse.json({ error: "sk, id and connectionId are required" }, { status: 400 });
   }
 
-  const kvKey = keyFor(sk, id);
   const existing = (await kvGet<Connection[]>(kvKey)) || [];
   if (!existing.some((c) => c.id === connectionId)) {
     return NextResponse.json({ error: "Connection not found" }, { status: 404 });

@@ -1,3 +1,7 @@
+// Org-wide settings, stored as one JSON object at roster_kv `settings:org` and
+// edited from the admin Settings screen. What's stored is laid over these
+// defaults with deepMerge, so a key added here takes effect even for settings
+// saved before it existed.
 export const SETTINGS_KEY = "settings:org";
 
 export const DEFAULT_ROSTER_SETTINGS = {
@@ -6,31 +10,22 @@ export const DEFAULT_ROSTER_SETTINGS = {
   logoUrl: "",
   logoEnabled: false,
   logoTone: "light",
+  // Display names for the two roster tabs (students are filed by tab, not grade).
   gradeTabs: {
-    hs: { label: "High School", grades: [9, 10, 11, 12] },
-    ms: { label: "Middle School", grades: [6, 7, 8] },
+    hs: { label: "High School" },
+    ms: { label: "Middle School" },
   },
-  meetingDay: "sunday",
-  weekStartsOn: "sunday",
   tracking: {
     hangoutNotes: true,
-    tags: false,
     birthdays: true,
     showGrade: true,
     school: true,
     age: true,
   },
-  defaults: {
-    newStudentStatus: "new",
-    autoArchive: false,
-    autoArchiveWeeks: 8,
-  },
   // A family connected with once in September is not still "connected" the
-  // following June, but nothing in the sheet ever said so — column C stayed
-  // ticked until somebody manually unticked it. After `resetAfterMonths` with
-  // no new connection the card flips itself to "Needs Connection", and with
-  // `autoReset` on the sheet's column C is put back to "Not Connected" too, so
-  // the two don't drift apart.
+  // following June. After `resetAfterMonths` with no new connection the card
+  // shows "Needs Connection", and with `autoReset` on the client also clears
+  // the student's `connected` flag in the database so the two don't drift.
   connections: {
     resetAfterMonths: 3,
     autoReset: true,
@@ -40,11 +35,10 @@ export const DEFAULT_ROSTER_SETTINGS = {
     // Comma-separated. Blank sends leader access requests to every admin.
     requestEmails: "",
     passcode: "",
+    // What a view-only passcode session may read (enforced in lib/auth.ts).
     passcodePermissions: {
       viewRoster: true,
-      viewAttendance: false,
       viewNotes: false,
-      viewPrayer: false,
     },
   },
   appearance: {
@@ -58,8 +52,6 @@ export const DEFAULT_ROSTER_SETTINGS = {
     modules: {
       roster: { pending: "view", approved: "edit", leader: "edit", admin: "admin" },
       activity: { pending: "view", approved: "view", leader: "edit", admin: "admin" },
-      brainDump: { pending: "none", approved: "edit", leader: "edit", admin: "admin" },
-      attendance: { pending: "view", approved: "edit", leader: "edit", admin: "admin" },
       hangoutNotes: { pending: "none", approved: "edit", leader: "edit", admin: "admin" },
       adminland: { pending: "none", approved: "none", leader: "none", admin: "admin" },
       dashboard: { pending: "view", approved: "view", leader: "view", admin: "admin" },
@@ -67,6 +59,7 @@ export const DEFAULT_ROSTER_SETTINGS = {
   },
 };
 
+// Plain-object merge, later sources winning; arrays and scalars are replaced.
 export function deepMerge(...sources: object[]): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const src of sources) {

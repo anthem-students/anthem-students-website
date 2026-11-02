@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
-import { kvGet, kvList, kvPut } from "../../../lib/kv";
+import { kvGet, kvPut } from "../../../lib/kv";
 import { requirePermission } from "../../../lib/auth";
+import { logActivity } from "../../../lib/activity";
+import { studentKey } from "../../../lib/rosterSchema";
 
 // Quick notes a leader jots about a student — "asked about baptism", "moved
 // houses". Distinct from the hangout log next door, which records a specific
 // meeting on a specific date; these are the running observations that used to
-// have nowhere to go but the sheet's single NOTES cell.
+// have nowhere to go but the student's single `notes` column.
 //
-// That cell (column J) is still read and shown, pinned above this list. It just
-// isn't written here — one shared cell can't hold a per-author history, and
-// two leaders typing into it at once would overwrite each other.
-//
-// Keyed by the student's stable sheet ID (column K), not by their position in
-// the roster, for the same reason the hangout log is: adding or deleting any
-// student shifts every later index by one and would silently re-file one
-// student's notes onto another.
+// That column (roster_students.notes, edited in the Edit Student modal) is
+// still shown, pinned above this list. This log is separate because one shared
+// field can't hold a per-author history.
+
+// Gated on the hangoutNotes module like the hangout log: both are pastoral
+// notes about minors, and a view-only session can't read either by default.
 
 export type Note = {
   id: string;
@@ -25,47 +25,28 @@ export type Note = {
   updatedAt?: string;
 };
 
-function keyFor(sk: string, id: string): string {
-  return `notes:${sk}:${id}`;
-}
-
 export async function GET(request: Request) {
-  const perm = await requirePermission("roster", "view");
+  const perm = await requirePermission("hangoutNotes", "view");
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
   const url = new URL(request.url);
-  const sk = url.searchParams.get("sk");
-  const id = url.searchParams.get("id");
-  if (!sk) return NextResponse.json({ error: "sk is required" }, { status: 400 });
+  const kvKey = studentKey("notes", url.searchParams.get("sk"), url.searchParams.get("id"));
+  if (!kvKey) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
 
-  // No id: an id -> count map for the whole tab, so the roster load can ask
-  // once per tab rather than once per card. Same shape the hangout log uses.
-  if (!id) {
-    const prefix = `notes:${sk}:`;
-    const { keys } = await kvList(prefix);
-    const entries = await Promise.all(
-      keys.map(async ({ name }) => {
-        const notes = await kvGet<Note[]>(name);
-        return [name.slice(prefix.length), (notes || []).length] as const;
-      })
-    );
-    return NextResponse.json({ counts: Object.fromEntries(entries) });
-  }
-
-  const data = await kvGet<Note[]>(keyFor(sk, id));
+  const data = await kvGet<Note[]>(kvKey);
   return NextResponse.json({ notes: data || [] });
 }
 
 export async function POST(request: Request) {
-  const perm = await requirePermission("roster", "edit");
+  const perm = await requirePermission("hangoutNotes", "edit");
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
   const user = perm.user;
 
   const body = await request.json();
-  const { sk, id } = body;
-  if (!sk || !id) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
+  const kvKey = studentKey("notes", body.sk, body.id);
+  if (!kvKey) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
 
-  const text = typeof body.text === "string" ? body.text.trim() : "";
+  const text = typeof body.text === "string" ? body.text.trim().slice(0, 5000) : "";
   if (!text) return NextResponse.json({ error: "A note can't be empty" }, { status: 400 });
 
   // Authorship is taken from the session, never from the request body — it's
@@ -78,37 +59,34 @@ export async function POST(request: Request) {
     createdAt: new Date().toISOString(),
   };
 
-  const kvKey = keyFor(sk, id);
   const existing = (await kvGet<Note[]>(kvKey)) || [];
   existing.push(note);
   await kvPut(kvKey, existing);
 
-  // Same flat, timestamp-keyed log the hangout feed writes to (see
-  // api/student/interactions) — the Activity tab reads across every type.
-  const studentName = typeof body.studentName === "string" ? body.studentName : "";
-  const actKey = `activity:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
-  await kvPut(
-    actKey,
-    { type: "note", leader: note.leader, leaderEmail: note.leaderEmail, summary: note.text, studentName, sk, id, createdAt: note.createdAt },
-    90 * 24 * 60 * 60
-  );
+  await logActivity(user, {
+    type: "note",
+    summary: note.text,
+    studentName: typeof body.studentName === "string" ? body.studentName : "",
+    sk: body.sk,
+    id: body.id,
+  });
 
   return NextResponse.json({ success: true, note });
 }
 
 export async function PUT(request: Request) {
-  const perm = await requirePermission("roster", "edit");
+  const perm = await requirePermission("hangoutNotes", "edit");
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
   const user = perm.user;
 
   const body = await request.json();
-  const { sk, id, noteId } = body;
-  if (!sk || !id || !noteId) return NextResponse.json({ error: "sk, id and noteId are required" }, { status: 400 });
+  const { noteId } = body;
+  const kvKey = studentKey("notes", body.sk, body.id);
+  if (!kvKey || !noteId) return NextResponse.json({ error: "sk, id and noteId are required" }, { status: 400 });
 
-  const text = typeof body.text === "string" ? body.text.trim() : "";
+  const text = typeof body.text === "string" ? body.text.trim().slice(0, 5000) : "";
   if (!text) return NextResponse.json({ error: "A note can't be empty" }, { status: 400 });
 
-  const kvKey = keyFor(sk, id);
   const existing = (await kvGet<Note[]>(kvKey)) || [];
   const noteIndex = existing.findIndex((n) => n.id === noteId);
   if (noteIndex === -1) return NextResponse.json({ error: "Note not found" }, { status: 404 });
@@ -125,15 +103,15 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const perm = await requirePermission("roster", "edit");
+  const perm = await requirePermission("hangoutNotes", "edit");
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
   const user = perm.user;
 
   const body = await request.json();
-  const { sk, id, noteId } = body;
-  if (!sk || !id || !noteId) return NextResponse.json({ error: "sk, id and noteId are required" }, { status: 400 });
+  const { noteId } = body;
+  const kvKey = studentKey("notes", body.sk, body.id);
+  if (!kvKey || !noteId) return NextResponse.json({ error: "sk, id and noteId are required" }, { status: 400 });
 
-  const kvKey = keyFor(sk, id);
   const existing = (await kvGet<Note[]>(kvKey)) || [];
   const note = existing.find((n) => n.id === noteId);
   if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });

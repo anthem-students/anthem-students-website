@@ -1,23 +1,15 @@
 import { NextResponse } from "next/server";
-import { kvGet, kvList } from "../../../lib/kv";
+import { kvEntries } from "../../../lib/kv";
 import { requirePermission } from "../../../lib/auth";
+import { ACTIVITY_PREFIX, type ActivityItem } from "../../../lib/activity";
 
-type ActivityItem = { createdAt: string; [key: string]: unknown };
-
+// The 30 newest Activity entries. Keys are timestamp-prefixed (see
+// lib/activity), so "newest" is just the last keys in sort order.
 export async function GET() {
-  // Activity items name students and the leaders who logged them. Reading this
-  // was unauthenticated until this commit (IMP-06); activity/stats next door
-  // was already gated the same way.
+  // Entries name students and quote notes about them — never anonymous.
   const perm = await requirePermission("activity", "view");
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
-  const list = await kvList("activity:");
-  const keys = list.keys.slice(-50).reverse();
-  const items: ActivityItem[] = [];
-  for (const key of keys) {
-    const item = await kvGet<ActivityItem>(key.name);
-    if (item) items.push(item);
-  }
-  items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  return NextResponse.json({ items: items.slice(0, 30) });
+  const rows = await kvEntries<ActivityItem>(ACTIVITY_PREFIX, { newestFirst: true, limit: 30 });
+  return NextResponse.json({ items: rows.map((r) => r.value) });
 }

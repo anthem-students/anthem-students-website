@@ -1,23 +1,18 @@
 import { NextResponse } from "next/server";
 import { kvGetMap } from "../../lib/kv";
 import { getSessionUser, hasPermission } from "../../lib/auth";
+import type { StudentGoals } from "../student/goals/route";
+import type { Connection } from "../student/connections/route";
+import type { PhotoCrop } from "../../lib/storage";
+import type { StudentMentors } from "../../lib/mentors";
 
-// Replaces five separate per-tab-pair fetches (goals, interaction counts,
-// note counts, connection dates, photo crops — ten requests total, each
-// re-checking session + permissions from scratch) with one request that
-// checks auth once per module and reuses the same memoized session lookup
-// (see the cache() wrapper on getSessionUser/getPermissionMatrix in
-// lib/auth.ts) for the rest. Read-only; every write still goes through its
-// own existing endpoint unchanged.
-
-type Goal = { text: string; done: boolean; primary?: boolean; createdAt?: string };
-type StudentGoals = { primaryGoal: string; goals: Goal[] };
-type Interaction = { id: string; [key: string]: unknown };
-type Note = { id: string; [key: string]: unknown };
-type Connection = { id: string; date: string; [key: string]: unknown };
-type PhotoCrop = { zoom: number; offX: number; offY: number };
-type Mentor = { email: string | null; name: string };
-type StudentMentors = { primary: Mentor | null; secondary: Mentor | null };
+// Everything the roster grid needs besides the students themselves, in one
+// request: goals, note/hangout counts, latest parent connection, photo crops,
+// mentors and apprentice flags, for both tabs. Each is one roster_kv query per
+// tab, all run in parallel. Read-only; every write has its own route.
+//
+// Note and hangout counts are only included for sessions allowed to read
+// hangout notes (interactionCountsOk / noteCountsOk tell the client which).
 
 function latestDate(list: Connection[]): string {
   return list.reduce((newest, c) => (c.date && c.date > newest ? c.date : newest), "");
@@ -35,22 +30,24 @@ export async function GET() {
 
   const [goals, noteCounts, connections, photoCrops, mentors, apprentices, interactionCounts] = await Promise.all([
     Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<StudentGoals>(`goals:${sk}:`)] as const)),
-    Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<Note[]>(`notes:${sk}:`)] as const)),
+    canSeeNotes
+      ? Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<unknown[]>(`notes:${sk}:`)] as const))
+      : Promise.resolve(null),
     Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<Connection[]>(`connections:${sk}:`)] as const)),
     Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<PhotoCrop>(`photoCrop:${sk}:`)] as const)),
     Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<StudentMentors>(`mentors:${sk}:`)] as const)),
     Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<unknown>(`apprentice:${sk}:`)] as const)),
     canSeeNotes
-      ? Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<Interaction[]>(`interactions:${sk}:`)] as const))
+      ? Promise.all(SKS.map(async (sk) => [sk, await kvGetMap<unknown[]>(`interactions:${sk}:`)] as const))
       : Promise.resolve(null),
   ]);
 
-  const byTab = <T,>(pairs: readonly (readonly [string, Record<string, T | null>])[]) =>
-    Object.fromEntries(pairs) as Record<(typeof SKS)[number], Record<string, T | null>>;
+  const byTab = <T,>(pairs: readonly (readonly [string, Record<string, T>])[]) =>
+    Object.fromEntries(pairs) as Record<(typeof SKS)[number], Record<string, T>>;
 
   const goalsByTab = byTab(goals);
-  const noteCountsByTab: Record<string, Record<string, number>> = {};
-  for (const [sk, map] of noteCounts) {
+  const noteCountsByTab: Record<string, Record<string, number>> = { hs: {}, ms: {} };
+  for (const [sk, map] of noteCounts || []) {
     noteCountsByTab[sk] = Object.fromEntries(Object.entries(map).map(([id, notes]) => [id, (notes || []).length]));
   }
 
@@ -85,5 +82,6 @@ export async function GET() {
     ),
     interactionCounts: interactionCountsByTab,
     interactionCountsOk: !!interactionCounts,
+    noteCountsOk: !!noteCounts,
   });
 }

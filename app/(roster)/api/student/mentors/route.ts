@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
-import { kvDelete, kvGet, kvPut } from "../../../lib/kv";
+import { kvDelete, kvDeleteMany, kvGet, kvGetMap, kvPut, kvPutMany } from "../../../lib/kv";
 import { requirePermission } from "../../../lib/auth";
-import {
-  logMentorActivity,
-  mentorKvKey,
-  normalizeMentor,
-  sameMentor,
-  type Mentor,
-  type MentorSlot,
-  type StudentMentors,
-} from "../../../lib/mentors";
+import { logActivity } from "../../../lib/activity";
+import { studentKey } from "../../../lib/rosterSchema";
+import { normalizeMentor, sameMentor, tidyMentors, type Mentor, type MentorSlot, type StudentMentors } from "../../../lib/mentors";
 
 // Reads and writes a student's primary/secondary mentor. The roster grid gets
 // everyone's mentors in one go from /api/bootstrap; this is for the
@@ -26,7 +20,7 @@ export async function GET(request: Request) {
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
   const url = new URL(request.url);
-  const key = mentorKvKey(url.searchParams.get("sk"), url.searchParams.get("id"));
+  const key = studentKey("mentors", url.searchParams.get("sk"), url.searchParams.get("id"));
   if (!key) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
 
   return NextResponse.json((await kvGet<StudentMentors>(key)) || EMPTY);
@@ -39,27 +33,22 @@ export async function PUT(request: Request) {
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
   const body = await request.json();
-  const key = mentorKvKey(body.sk, body.id);
+  const key = studentKey("mentors", body.sk, body.id);
   if (!key) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
 
-  let primary = normalizeMentor(body.primary);
-  let secondary = normalizeMentor(body.secondary);
-  if (primary === undefined || secondary === undefined) {
+  const rawPrimary = normalizeMentor(body.primary);
+  const rawSecondary = normalizeMentor(body.secondary);
+  if (rawPrimary === undefined || rawSecondary === undefined) {
     return NextResponse.json({ error: "Invalid mentor" }, { status: 400 });
   }
-  if (sameMentor(primary, secondary)) secondary = null;
-  // A secondary with no primary is just a primary.
-  if (!primary && secondary) [primary, secondary] = [secondary, null];
+  const { primary, secondary } = tidyMentors(rawPrimary, rawSecondary);
 
   const before = (await kvGet<StudentMentors>(key)) || EMPTY;
-  const next: StudentMentors = {
-    primary,
-    secondary,
-    updatedAt: new Date().toISOString(),
-    updatedBy: perm.user.email || perm.user.name,
-  };
-  if (primary || secondary) await kvPut(key, next);
-  else await kvDelete(key);
+  if (primary || secondary) {
+    await kvPut(key, { primary, secondary, updatedAt: new Date().toISOString(), updatedBy: perm.user.email || perm.user.name });
+  } else {
+    await kvDelete(key);
+  }
 
   const changes: string[] = [];
   if (!sameMentor(before.primary, primary) && (before.primary || primary)) {
@@ -69,7 +58,7 @@ export async function PUT(request: Request) {
     changes.push(`Secondary: ${label(before.secondary)} → ${label(secondary)}`);
   }
   if (changes.length) {
-    await logMentorActivity(perm.user, {
+    await logActivity(perm.user, {
       type: "mentor_changed",
       summary: changes.join(" · "),
       studentName: typeof body.studentName === "string" ? body.studentName : "",
@@ -96,27 +85,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "students must be a non-empty list" }, { status: 400 });
   }
 
+  // Read both tabs' current mentors once, then write everything in one go.
+  const current: Record<string, StudentMentors> = {};
+  for (const sk of ["hs", "ms"]) {
+    const map = await kvGetMap<StudentMentors>(`mentors:${sk}:`);
+    for (const [id, m] of Object.entries(map)) current[`mentors:${sk}:${id}`] = m;
+  }
+
   const now = new Date().toISOString();
+  const updatedBy = perm.user.email || perm.user.name;
+  const puts: { key: string; value: StudentMentors }[] = [];
+  const deletes: string[] = [];
   const updated: Record<string, StudentMentors> = {};
   for (const t of targets) {
-    const key = mentorKvKey(t.sk, t.id);
+    const key = studentKey("mentors", t.sk, t.id);
     if (!key) continue;
-    const cur = (await kvGet<StudentMentors>(key)) || EMPTY;
-    let primary = slot === "primary" ? mentor : cur.primary;
-    let secondary = slot === "secondary" ? mentor : cur.secondary;
-    if (sameMentor(primary, secondary)) secondary = null;
-    if (!primary && secondary) [primary, secondary] = [secondary, null];
-    if (primary || secondary) {
-      await kvPut(key, { primary, secondary, updatedAt: now, updatedBy: perm.user.email || perm.user.name });
-    } else {
-      await kvDelete(key);
-    }
-    updated[`${t.sk}:${t.id}`] = { primary, secondary };
+    const cur = current[key] || EMPTY;
+    const next = tidyMentors(slot === "primary" ? mentor : cur.primary, slot === "secondary" ? mentor : cur.secondary);
+    if (next.primary || next.secondary) puts.push({ key, value: { ...next, updatedAt: now, updatedBy } });
+    else deletes.push(key);
+    updated[`${t.sk}:${t.id}`] = next;
   }
+  await kvPutMany(puts);
+  await kvDeleteMany(deletes);
 
   const count = Object.keys(updated).length;
   if (count) {
-    await logMentorActivity(perm.user, {
+    await logActivity(perm.user, {
       type: "mentor_bulk",
       summary: mentor
         ? `Set ${mentor.name} as ${slot} mentor for ${count} student${count === 1 ? "" : "s"}`

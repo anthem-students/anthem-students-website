@@ -22,6 +22,9 @@ export async function POST(request: Request) {
   // A pure recrop (no new file) sends photoUrl as null — don't let that wipe
   // out the existing photo, only ever change photoUrl when one is provided.
   // An empty string is the explicit "remove photo".
+  if (typeof photoUrl === "string" && photoUrl && !/^https:\/\//.test(photoUrl)) {
+    return NextResponse.json({ error: "Invalid photo" }, { status: 400 });
+  }
   const previousPhoto = target.photoUrl || "";
   if (typeof photoUrl === "string") target.photoUrl = photoUrl;
   const crop = parsePhotoCrop(photoCrop ?? null);

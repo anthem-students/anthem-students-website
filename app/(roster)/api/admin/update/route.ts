@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { kvDelete, kvGet, kvList, kvPut } from "../../../lib/kv";
+import { kvDeleteMany, kvEntries, kvGet, kvPut } from "../../../lib/kv";
 import { requireAdmin, type RosterUser } from "../../../lib/auth";
 import { emailLayout, sendEmail } from "../../../lib/email";
 import { siteOrigin } from "../../../lib/origin";
@@ -11,13 +11,8 @@ async function audit(entry: Record<string, unknown> & { email: string }) {
 // Drop any outstanding email approve/decline token for this address, so a stale
 // link in an inbox can't resurrect a decision already made in Adminland.
 async function dropSignupTokens(email: string) {
-  const list = await kvList("signupAction:");
-  await Promise.all(
-    list.keys.map(async (key) => {
-      const rec = await kvGet<{ email?: string }>(key.name);
-      if (rec?.email?.toLowerCase() === email.toLowerCase()) await kvDelete(key.name);
-    })
-  );
+  const rows = await kvEntries<{ email?: string }>("signupAction:");
+  await kvDeleteMany(rows.filter((r) => r.value?.email?.toLowerCase() === email.toLowerCase()).map((r) => r.key));
 }
 
 export async function POST(request: Request) {
@@ -40,7 +35,7 @@ export async function POST(request: Request) {
   // Declining from Adminland behaves exactly like declining from the email
   // link: the account is deleted and the person is told nothing.
   if (action === "delete") {
-    await kvDelete(key);
+    await kvDeleteMany([key]);
     await dropSignupTokens(lower);
     await audit({ actor: actingUser.email || "admin", email: lower, action: "declined-and-deleted" });
     return NextResponse.json({ success: true, deleted: true });

@@ -1,62 +1,87 @@
 import { NextResponse } from "next/server";
-import { kvGet, kvList, kvPut } from "../../../lib/kv";
+import { kvGet, kvPut } from "../../../lib/kv";
 import { requirePermission } from "../../../lib/auth";
+import { logActivity } from "../../../lib/activity";
+import { studentKey } from "../../../lib/rosterSchema";
 
-// Hangout notes are keyed by the student's stable sheet ID (column K), not by
-// their position in the roster. The key used to be
-// `interactions:{sk}:{section}:{index}`, which broke twice over: changing a
-// student's Connection Status moved them to a different section and orphaned
-// their notes, and deleting any student shifted every later student's index by
-// one, silently re-filing their notes onto the wrong person.
+// Hangouts ("interactions" in the API and storage): a dated record that a
+// leader met with a student, plus what they talked about. Stored as one array
+// per student under `interactions:{sk}:{id}`. The grid's per-student counts
+// come from /api/bootstrap; this route reads one student's log and writes.
+//
+// Gated on the hangoutNotes module, not roster — these are the most sensitive
+// text in the app.
 
-type Interaction = { id: string; leaderEmail?: string; [key: string]: unknown };
+export type Interaction = {
+  id: string;
+  date: string; // YYYY-MM-DD, the day the hangout happened
+  summary: string;
+  leader: string;
+  leaderEmail?: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_SUMMARY = 5000;
+
+// Only date and summary ever come from the client. Returns an error string
+// for a bad value, or the cleaned fields.
+function readFields(body: Record<string, unknown> | undefined): { date: string; summary: string } | string {
+  const date = typeof body?.date === "string" ? body.date.trim() : "";
+  const summary = typeof body?.summary === "string" ? body.summary.trim() : "";
+  if (!DATE_RE.test(date)) return "A hangout needs a valid date";
+  if (!summary) return "Summary cannot be empty";
+  if (summary.length > MAX_SUMMARY) return "That summary is too long";
+  return { date, summary };
+}
 
 export async function GET(request: Request) {
-  // Pastoral notes about minors. Reading them was unauthenticated until this
-  // commit (IMP-06) even though every write path here was already gated.
   const perm = await requirePermission("hangoutNotes", "view");
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
   const url = new URL(request.url);
-  const sk = url.searchParams.get("sk");
-  const id = url.searchParams.get("id");
-  if (!sk) return NextResponse.json({ error: "sk is required" }, { status: 400 });
+  const key = studentKey("interactions", url.searchParams.get("sk"), url.searchParams.get("id"));
+  if (!key) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
 
-  // No id: return an id -> count map for the whole tab, for the roster's
-  // "Most interactions" sort.
-  if (!id) {
-    const prefix = `interactions:${sk}:`;
-    const { keys } = await kvList(prefix);
-    const entries = await Promise.all(
-      keys.map(async ({ name }) => {
-        const notes = await kvGet<Interaction[]>(name);
-        return [name.slice(prefix.length), (notes || []).length] as const;
-      })
-    );
-    return NextResponse.json({ counts: Object.fromEntries(entries) });
-  }
-
-  const data = await kvGet<Interaction[]>(`interactions:${sk}:${id}`);
-  return NextResponse.json({ interactions: data || [] });
+  return NextResponse.json({ interactions: (await kvGet<Interaction[]>(key)) || [] });
 }
 
 export async function POST(request: Request) {
   const perm = await requirePermission("hangoutNotes", "edit");
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
+  const user = perm.user;
 
   const body = await request.json();
-  const { sk, id, interaction, rowIndex, studentName } = body;
+  const key = studentKey("interactions", body.sk, body.id);
+  if (!key) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
+  const fields = readFields(body.interaction);
+  if (typeof fields === "string") return NextResponse.json({ error: fields }, { status: 400 });
 
-  const kvKey = `interactions:${sk}:${id}`;
-  const existing = (await kvGet<Interaction[]>(kvKey)) || [];
+  // Authorship comes from the session, never the body — it's what decides who
+  // may later edit or delete this entry.
+  const interaction: Interaction = {
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    ...fields,
+    leader: user.name || "Someone",
+    leaderEmail: user.email || undefined,
+    createdAt: new Date().toISOString(),
+  };
+
+  const existing = (await kvGet<Interaction[]>(key)) || [];
   existing.push(interaction);
-  await kvPut(kvKey, existing);
+  await kvPut(key, existing);
 
-  const actKey = `activity:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
-  await kvPut(actKey, { ...interaction, studentName: studentName || "", sk, id, rowIndex, type: "hangout" }, 90 * 24 * 60 * 60);
+  await logActivity(user, {
+    type: "hangout",
+    date: interaction.date,
+    summary: interaction.summary,
+    studentName: typeof body.studentName === "string" ? body.studentName : "",
+    sk: body.sk,
+    id: body.id,
+  });
 
-
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, interaction });
 }
 
 export async function PUT(request: Request) {
@@ -65,22 +90,22 @@ export async function PUT(request: Request) {
   const user = perm.user;
 
   const body = await request.json();
-  const { sk, id, interactionId, changes } = body;
+  const key = studentKey("interactions", body.sk, body.id);
+  if (!key) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
+  const fields = readFields(body.changes);
+  if (typeof fields === "string") return NextResponse.json({ error: fields }, { status: 400 });
 
-  const kvKey = `interactions:${sk}:${id}`;
-  const existing = (await kvGet<Interaction[]>(kvKey)) || [];
-  const noteIndex = existing.findIndex((n) => n.id === interactionId);
-  if (noteIndex === -1) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+  const existing = (await kvGet<Interaction[]>(key)) || [];
+  const index = existing.findIndex((n) => n.id === body.interactionId);
+  if (index === -1) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-  const note = existing[noteIndex];
+  const note = existing[index];
   if (user.role !== "admin" && note.leaderEmail !== user.email) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  existing[noteIndex] = { ...note, ...changes, updatedAt: new Date().toISOString() };
-  await kvPut(kvKey, existing);
-
-
+  existing[index] = { ...note, ...fields, updatedAt: new Date().toISOString() };
+  await kvPut(key, existing);
   return NextResponse.json({ success: true });
 }
 
@@ -90,20 +115,17 @@ export async function DELETE(request: Request) {
   const user = perm.user;
 
   const body = await request.json();
-  const { sk, id, interactionId } = body;
+  const key = studentKey("interactions", body.sk, body.id);
+  if (!key) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
 
-  const kvKey = `interactions:${sk}:${id}`;
-  const existing = (await kvGet<Interaction[]>(kvKey)) || [];
-  const note = existing.find((n) => n.id === interactionId);
+  const existing = (await kvGet<Interaction[]>(key)) || [];
+  const note = existing.find((n) => n.id === body.interactionId);
   if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
   if (user.role !== "admin" && note.leaderEmail !== user.email) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const updated = existing.filter((n) => n.id !== interactionId);
-  await kvPut(kvKey, updated);
-
-
+  await kvPut(key, existing.filter((n) => n.id !== body.interactionId));
   return NextResponse.json({ success: true });
 }

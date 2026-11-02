@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
-import { requirePermission, type RosterUser } from "../../../lib/auth";
+import { hasPermission, requirePermission } from "../../../lib/auth";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
-import { kvPut } from "../../../lib/kv";
+import { logActivity } from "../../../lib/activity";
 import { deleteStoredPhoto } from "../../../lib/storage";
-import { SHEET_KEYS, STATUSES, type SheetKey, type Status } from "../../../lib/rosterSchema";
+import { TAB_KEYS, STATUSES, type TabKey, type Status } from "../../../lib/rosterSchema";
 
 // Every action here mutates the roster, so this is POST-only. A GET would make
 // `?action=delete` reachable by navigation — and because the session cookie is
 // SameSite=Lax (sent on top-level cross-site GETs), a leader clicking a crafted
 // link would delete a student. A cross-site POST gets no cookie at all.
 //
-// The body is the same urlencoded {action, payload} the client has always
-// sent. Students are
-// found by (sheet, id) only — rowIndex is accepted but ignored, since a row
-// number the client is still holding from before a delete is stale.
+// The body is urlencoded {action, payload}; payload.sheet is the tab ("hs" or
+// "ms" — the name dates from when the roster was a Google Sheet). Students
+// are found by (tab, id) only; a rowIndex in the payload is ignored, since
+// one the client is still holding from before a delete is stale.
 
 const ALLOWED_ACTIONS = new Set(["add", "update", "delete"]);
 
@@ -92,7 +92,7 @@ async function releasePhotos(photoUrl: string | null, thumbUrl: string | null) {
   }
 }
 
-async function addStudent(sk: SheetKey, person: Record<string, unknown>) {
+async function addStudent(sk: TabKey, person: Record<string, unknown>) {
   const db = supabaseAdmin();
   const cols = toColumns(person);
   if (!cols.name) throw new BadRequest("Name is required");
@@ -120,7 +120,7 @@ async function addStudent(sk: SheetKey, person: Record<string, unknown>) {
   return { success: true, id: data.id, newRowIndex: data.row_index, lastConnected: data.last_connected };
 }
 
-async function updateStudent(sk: SheetKey, id: string, fields: Record<string, unknown>) {
+async function updateStudent(sk: TabKey, id: string, fields: Record<string, unknown>) {
   const db = supabaseAdmin();
   const { data: current, error: readErr } = await db
     .from("roster_students")
@@ -161,7 +161,7 @@ async function updateStudent(sk: SheetKey, id: string, fields: Record<string, un
   return { success: true, rowIndex: data.row_index, lastConnected: data.last_connected };
 }
 
-async function deleteStudent(sk: SheetKey, id: string) {
+async function deleteStudent(sk: TabKey, id: string) {
   const { data, error } = await supabaseAdmin()
     .from("roster_students")
     .delete()
@@ -175,32 +175,17 @@ async function deleteStudent(sk: SheetKey, id: string) {
   return { success: true };
 }
 
-// Feeds the same flat, timestamp-keyed log the hangout/connection/note writes
-// use (see api/student/interactions) — the Activity tab reads across every
-// type. Best-effort: a failure here must never surface as a failure of the
-// actual write.
-async function logActivity(action: string, sk: string, id: string, payload: Record<string, unknown>, actor: RosterUser) {
-  let type: string;
-  let studentName = "";
+// One Activity entry per change. Best-effort: a failure here must never
+// surface as a failure of the actual write.
+function activityFor(action: string, payload: Record<string, unknown>) {
   if (action === "add") {
-    type = "student_added";
-    studentName = String((payload.person as Record<string, unknown> | undefined)?.name || "");
-  } else if (action === "update") {
-    type = "student_updated";
-    const fields = (payload.fields as Record<string, unknown> | undefined) || {};
-    studentName = String(fields.name || payload.studentName || "");
-  } else {
-    type = "student_removed";
-    studentName = String(payload.studentName || "");
+    return { type: "student_added" as const, studentName: String((payload.person as Record<string, unknown> | undefined)?.name || "") };
   }
-  if (!studentName) return;
-
-  const actKey = `activity:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
-  await kvPut(
-    actKey,
-    { type, studentName, sk, id, leader: actor.name || "Someone", leaderEmail: actor.email || undefined, createdAt: new Date().toISOString() },
-    90 * 24 * 60 * 60
-  );
+  if (action === "update") {
+    const fields = (payload.fields as Record<string, unknown> | undefined) || {};
+    return { type: "student_updated" as const, studentName: String(fields.name || payload.studentName || "") };
+  }
+  return { type: "student_removed" as const, studentName: String(payload.studentName || "") };
 }
 
 export async function POST(request: Request) {
@@ -222,8 +207,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Unsupported action: ${action || "(none)"}` }, { status: 400 });
   }
 
-  const sk = String(payload.sheet || "") as SheetKey;
-  if (!SHEET_KEYS.includes(sk)) return NextResponse.json({ error: "Unknown roster tab" }, { status: 400 });
+  const sk = String(payload.sheet || "") as TabKey;
+  if (!TAB_KEYS.includes(sk)) return NextResponse.json({ error: "Unknown roster tab" }, { status: 400 });
   const id = typeof payload.id === "string" ? payload.id : "";
   if (action !== "add" && !id) return NextResponse.json({ error: "Missing student id" }, { status: 400 });
 
@@ -232,13 +217,18 @@ export async function POST(request: Request) {
     if (action === "add") {
       result = await addStudent(sk, (payload.person as Record<string, unknown>) || {});
     } else if (action === "update") {
-      result = await updateStudent(sk, id, (payload.fields as Record<string, unknown>) || {});
+      const fields = { ...((payload.fields as Record<string, unknown>) || {}) };
+      // A session that can't read the pinned note was sent it blank (see
+      // api/students); don't let saving the form write that blank back.
+      if (!(await hasPermission(perm.user, "hangoutNotes", "view"))) delete fields.notes;
+      result = await updateStudent(sk, id, fields);
     } else {
       result = await deleteStudent(sk, id);
     }
 
     try {
-      await logActivity(action, sk, (result.id as string) || id, payload, perm.user);
+      const item = activityFor(action, payload);
+      if (item.studentName) await logActivity(perm.user, { ...item, sk, id: (result.id as string) || id });
     } catch (e) {
       console.error("[roster/students/write] activity log failed:", e instanceof Error ? e.message : e);
     }

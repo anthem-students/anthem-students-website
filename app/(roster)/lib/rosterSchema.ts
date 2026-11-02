@@ -5,9 +5,9 @@
 // notes, mentors, connection logs and photo crops are not columns here — they
 // live in roster_kv under `{kind}:{sk}:{id}`, which is why ids never change.
 
-export type SheetKey = "hs" | "ms";
+export type TabKey = "hs" | "ms";
 
-export const SHEET_KEYS: SheetKey[] = ["hs", "ms"];
+export const TAB_KEYS: TabKey[] = ["hs", "ms"];
 
 export type Status = "core" | "loose" | "fringe";
 
@@ -35,7 +35,7 @@ export type Student = {
 };
 
 export type StudentRow = {
-  sk: SheetKey;
+  sk: TabKey;
   id: string;
   row_index: number;
   name: string;
@@ -68,4 +68,15 @@ export function rowToStudent(row: StudentRow): Student {
     thumbUrl: row.thumb_url,
     notes: row.notes,
   };
+}
+
+// Everything attached to a student that isn't a column — goals, notes,
+// hangouts, connection log, mentors, apprentice flag, photo crop — lives in
+// roster_kv under `{kind}:{sk}:{id}`. Returns null for a malformed sk/id so a
+// route can reject the request instead of writing under a junk key.
+export type StudentKvKind = "goals" | "notes" | "interactions" | "connections" | "mentors" | "apprentice" | "photoCrop";
+
+export function studentKey(kind: StudentKvKind, sk: unknown, id: unknown): string | null {
+  if (!TAB_KEYS.includes(sk as TabKey) || typeof id !== "string" || !id || id.length > 100) return null;
+  return `${kind}:${sk}:${id}`;
 }

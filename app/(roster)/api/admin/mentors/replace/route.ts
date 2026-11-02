@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { kvDelete, kvGetMap, kvPut } from "../../../../lib/kv";
+import { kvDeleteMany, kvGetMap, kvPutMany } from "../../../../lib/kv";
+import { logActivity } from "../../../../lib/activity";
 import { requireAdmin } from "../../../../lib/auth";
 import {
   MENTOR_SLOTS,
-  logMentorActivity,
   mentorIdentity,
   normalizeMentor,
-  sameMentor,
+  tidyMentors,
   type MentorSlot,
   type StudentMentors,
 } from "../../../../lib/mentors";
@@ -31,6 +31,8 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   let changed = 0;
   let fromName = "";
+  const puts: { key: string; value: StudentMentors }[] = [];
+  const deletes: string[] = [];
 
   for (const sk of ["hs", "ms"]) {
     const map = await kvGetMap<StudentMentors>(`mentors:${sk}:`);
@@ -49,20 +51,21 @@ export async function POST(request: Request) {
         hit = true;
       }
       if (!hit) continue;
-      if (sameMentor(primary, secondary)) secondary = null;
-      if (!primary && secondary) [primary, secondary] = [secondary, null];
+      ({ primary, secondary } = tidyMentors(primary, secondary));
       const key = `mentors:${sk}:${id}`;
       if (primary || secondary) {
-        await kvPut(key, { primary, secondary, updatedAt: now, updatedBy: perm.user.email || perm.user.name });
+        puts.push({ key, value: { primary, secondary, updatedAt: now, updatedBy: perm.user.email || perm.user.name } });
       } else {
-        await kvDelete(key);
+        deletes.push(key);
       }
       changed++;
     }
   }
+  await kvPutMany(puts);
+  await kvDeleteMany(deletes);
 
   if (changed) {
-    await logMentorActivity(perm.user, {
+    await logActivity(perm.user, {
       type: "mentor_bulk",
       summary: `Moved ${changed} student${changed === 1 ? "" : "s"} from ${fromName || from} to ${to ? to.name : "unassigned"}`,
     });

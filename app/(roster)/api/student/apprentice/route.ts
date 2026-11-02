@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server";
-import { kvDelete, kvGet, kvPut } from "../../../lib/kv";
+import { kvDelete, kvDeleteMany, kvGet, kvGetMap, kvPut, kvPutMany } from "../../../lib/kv";
+import { studentKey } from "../../../lib/rosterSchema";
 import { requirePermission } from "../../../lib/auth";
 import { logActivity } from "../../../lib/activity";
 
 // Marks a student as a student apprentice. Lives in roster_kv under
-// `apprentice:{sk}:{id}` — keyed by the stable sheet ID like goals and
-// mentors, present only while the student is one. The roster gets everyone's
-// flag at once from /api/bootstrap.
+// `apprentice:{sk}:{id}`, present only while the student is one. The roster
+// gets everyone's flag at once from /api/bootstrap.
 
 type Apprentice = { since: string; by: string };
-
-function keyFor(sk: unknown, id: unknown): string | null {
-  if ((sk !== "hs" && sk !== "ms") || typeof id !== "string" || !id) return null;
-  return `apprentice:${sk}:${id}`;
-}
 
 async function setFlag(key: string, on: boolean, by: string): Promise<boolean> {
   const existing = await kvGet<Apprentice>(key);
@@ -28,7 +23,7 @@ export async function PUT(request: Request) {
   if (!perm.ok) return NextResponse.json({ error: perm.error }, { status: perm.status });
 
   const body = await request.json();
-  const key = keyFor(body.sk, body.id);
+  const key = studentKey("apprentice", body.sk, body.id);
   if (!key) return NextResponse.json({ error: "sk and id are required" }, { status: 400 });
   const on = body.apprentice === true;
 
@@ -57,14 +52,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "students must be a non-empty list" }, { status: 400 });
   }
 
+  const existing = new Set<string>();
+  for (const sk of ["hs", "ms"]) {
+    for (const id of Object.keys(await kvGetMap(`apprentice:${sk}:`))) existing.add(`apprentice:${sk}:${id}`);
+  }
+
   const updated: string[] = [];
-  let changed = 0;
+  const toChange: string[] = [];
   for (const t of targets) {
-    const key = keyFor(t.sk, t.id);
+    const key = studentKey("apprentice", t.sk, t.id);
     if (!key) continue;
-    if (await setFlag(key, on, perm.user.email || perm.user.name)) changed++;
+    if (on !== existing.has(key)) toChange.push(key);
     updated.push(`${t.sk}:${t.id}`);
   }
+  if (on) {
+    const value: Apprentice = { since: new Date().toISOString(), by: perm.user.email || perm.user.name };
+    await kvPutMany(toChange.map((key) => ({ key, value })));
+  } else {
+    await kvDeleteMany(toChange);
+  }
+  const changed = toChange.length;
 
   if (changed) {
     await logActivity(perm.user, {

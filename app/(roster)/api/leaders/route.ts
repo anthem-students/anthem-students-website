@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { kvGet, kvList } from "../../lib/kv";
+import { kvEntries } from "../../lib/kv";
 import { getSessionUser, type RosterUser } from "../../lib/auth";
 
 // A lightweight leader directory — name, email, photo — for resolving "who
@@ -11,13 +11,10 @@ export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { keys } = await kvList("user:");
-  const leaders: { name: string; email: string; photoUrl: string | null; photoCrop: RosterUser["photoCrop"] }[] = [];
-  for (const key of keys) {
-    const u = await kvGet<RosterUser>(key.name);
-    if (!u || !u.email) continue;
-    if (u.role !== "leader" && u.role !== "admin") continue;
-    leaders.push({ name: u.name, email: u.email, photoUrl: u.photoUrl || null, photoCrop: u.photoCrop || null });
-  }
+  const rows = await kvEntries<RosterUser>("user:");
+  const leaders = rows
+    .map((r) => r.value)
+    .filter((u) => u?.email && (u.role === "leader" || u.role === "admin"))
+    .map((u) => ({ name: u.name, email: u.email!, photoUrl: u.photoUrl || null, photoCrop: u.photoCrop || null }));
   return NextResponse.json({ leaders });
 }

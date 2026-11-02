@@ -56,7 +56,7 @@ The client uses camelCase. The mapping is in `lib/rosterSchema.ts`.
 
 ### `roster_kv` (key-value table)
 
-Columns: `key text primary key, value jsonb, expires_at timestamptz`. Helpers live in `lib/kv.ts`. Expired rows read back as missing but aren't deleted until read (see KNOWN_ISSUES). List reads are prefix `LIKE`s, so always read a whole prefix with `kvEntries`/`kvGetMap` (one query), never `kvGet` in a loop.
+Columns: `key text primary key, value jsonb, expires_at timestamptz`. Helpers live in `lib/kv.ts`. Expired rows read back as missing, and a daily `pg_cron` job (`roster-kv-expiry-sweep`, 09:00 UTC) deletes them. List reads are prefix `LIKE`s, so always read a whole prefix with `kvEntries`/`kvGetMap` (one query), never `kvGet` in a loop.
 
 | Key | Value |
 | --- | --- |

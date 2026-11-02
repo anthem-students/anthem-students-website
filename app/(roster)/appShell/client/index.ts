@@ -27,9 +27,13 @@ import { BOOT } from "./21-boot";
 // statements that run immediately (the `let` state in 01 must come first,
 // and 21's DOMContentLoaded handler last) — function declarations hoist.
 //
-// Nothing here is type-checked: it's text. Watch backslashes — inside these
-// template strings a regex like /\\s/ has to be written with a doubled
-// backslash, and an apostrophe inside a single-quoted JS string as \\'.
+// Nothing here is type-checked or linted: it's text until the browser runs it.
+// Three rules for editing these strings:
+//   - never type a backtick, not even in a comment — it ends the template;
+//   - double every backslash: a regex /\s/ is written /\\s/, and an
+//     apostrophe inside a single-quoted JS string is \\';
+//   - run every value a person typed through esc() before it goes into HTML.
+// `npm run check:client` evaluates the joined script and reports syntax errors.
 export const APP_JS = [
   STATE,
   HELPERS,

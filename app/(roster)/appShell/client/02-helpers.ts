@@ -1,6 +1,15 @@
 // Small formatting helpers (dates, ages, Drive thumbnails), screen switching and the main nav panels.
 // Part of the roster's client script; see ./index.ts.
 export const HELPERS = `// ── HELPERS ─────────────────────────────────────────────────
+// Escape anything a person typed (names, notes, schools…) before it goes into
+// innerHTML or an HTML attribute. Most of this app builds HTML by string
+// concatenation, so every interpolated value from the database goes through
+// esc() — including into attributes, since it escapes both quote characters.
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 function initials(n) {
   return (n||'?').trim().split(/\\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
 }
@@ -15,8 +24,7 @@ function driveThumb(url, w) {
   const raw = String(url).trim();
   const size = w || 400;
 
-  // R2 URLs and direct Google-hosted image URLs are served directly
-  if (raw.startsWith('/r2/')) return raw;
+  // Direct Google-hosted image URLs are served as-is.
   if (/^https?:\\/\\//.test(raw) && raw.includes('googleusercontent.com')) return raw;
 
   const mPath = raw.match(/\\/d\\/([a-zA-Z0-9_-]+)/);
@@ -99,12 +107,12 @@ function switchMainNav(name, btn) {
   document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   // Sync mobile drawer active state
-  ['roster','dashboard','activity','dump'].forEach(n => {
+  ['roster','dashboard','activity','quicklog'].forEach(n => {
     const mb = document.getElementById('mob-pill-'+n);
     if (mb) mb.classList.toggle('active', n === name);
   });
   // Sync bottom nav active state
-  ['roster','dashboard','activity','dump'].forEach(n => {
+  ['roster','dashboard','activity','quicklog'].forEach(n => {
     const bb = document.getElementById('bnav-'+n);
     if (bb) bb.classList.toggle('active', n === name);
   });

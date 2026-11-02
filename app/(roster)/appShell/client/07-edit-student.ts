@@ -103,7 +103,7 @@ async function saveEdit() {
   const btn=document.getElementById('ef-save-btn');
   const origText=btn.textContent;
   btn.disabled=true; btn.textContent='Saving…';
-  // The primary goal is the one field on this form that isn't a sheet column
+  // The primary goal is the one field on this form that isn't a student column
   // any more — it goes to roster_kv with the rest of the student's goals.
   const primaryGoal=v('ef-primary-goal');
   const fields={

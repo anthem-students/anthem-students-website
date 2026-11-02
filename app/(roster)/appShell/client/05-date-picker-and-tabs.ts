@@ -151,8 +151,6 @@ function paintConnected(sk, idx, saving) {
   }
 }
 
-// ── SEARCH (replaced by applyFilters below) ─────────────────
-
 // ── HS/MS TAB ────────────────────────────────────────────────
 function switchTab(sk, btn) {
   const panel = document.getElementById('tab-'+sk);

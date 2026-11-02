@@ -1,24 +1,28 @@
 // The Activity feed.
 // Part of the roster's client script; see ./index.ts.
 export const ACTIVITY = `// ── ACTIVITY FEED ─────────────────────────────────────────────
-// Every kind of "did something" event shares the same activity: log now (see
-// api/student/interactions, connections, notes, and api/students/write) — a
-// hangout, a parent connection, a note, or a student added/edited/removed.
+// Every kind of "did something" event lands in the same activity: log (see
+// lib/activity.ts) — a hangout, a parent connection, a note, a mentor or
+// apprentice change, or a student added/edited/removed.
 // Older records from before the type field existed have none, and those are
 // all hangouts (the only writer at the time), so a missing type defaults to it.
-function activityCopy(item, leaderName) {
-  const student='<span>'+item.studentName+'</span>';
+// Returns the headline as HTML (names already escaped) and the summary as
+// plain text (escaped where it's rendered), or null for no summary line.
+function activityCopy(item, rawLeaderName) {
+  const student='<span>'+esc(item.studentName)+'</span>';
+  const leaderName=esc(rawLeaderName);
+  const summary=item.summary || '';
   switch (item.type) {
-    case 'connection': return { names: leaderName+' connected with '+student+'’s family', summary: item.summary || 'No note added.' };
-    case 'note': return { names: leaderName+' added a note about '+student, summary: item.summary || '' };
+    case 'connection': return { names: leaderName+' connected with '+student+'’s family', summary: summary || 'No note added.' };
+    case 'note': return { names: leaderName+' added a note about '+student, summary };
     case 'student_added': return { names: leaderName+' added '+student+' to the roster', summary: null };
     case 'student_updated': return { names: leaderName+' updated '+student+'’s details', summary: null };
     case 'student_removed': return { names: leaderName+' removed '+student+' from the roster', summary: null };
-    case 'mentor_changed': return { names: leaderName+' changed '+student+'’s mentor', summary: dashEsc(item.summary || '') };
-    case 'mentor_bulk': return { names: leaderName+' reassigned mentors', summary: dashEsc(item.summary || '') };
-    case 'apprentice_changed': return { names: leaderName+' updated '+student+'’s apprentice status', summary: dashEsc(item.summary || '') };
-    case 'apprentice_bulk': return { names: leaderName+' updated student apprentices', summary: dashEsc(item.summary || '') };
-    default: return { names: student+' × '+leaderName, summary: item.summary || '' }; // hangout, or a legacy untyped record
+    case 'mentor_changed': return { names: leaderName+' changed '+student+'’s mentor', summary };
+    case 'mentor_bulk': return { names: leaderName+' reassigned mentors', summary };
+    case 'apprentice_changed': return { names: leaderName+' updated '+student+'’s apprentice status', summary };
+    case 'apprentice_bulk': return { names: leaderName+' updated student apprentices', summary };
+    default: return { names: student+' × '+leaderName, summary }; // hangout, or a legacy untyped record
   }
 }
 
@@ -43,24 +47,24 @@ async function loadActivityFeed() {
       const sg=GRADIENTS[0], lg=GRADIENTS[2];
       const {names, summary}=activityCopy(item, leaderName);
       const clickAttrs=canNavigate
-        ? ' tabindex="0" role="button" aria-label="View '+item.studentName+'" onclick="navigateToStudent(\\''+item.studentName+'\\')"'
+        ? ' tabindex="0" role="button" aria-label="View '+esc(item.studentName)+'" data-name="'+esc(item.studentName)+'" onclick="navigateToStudent(this.dataset.name)"'
         : '';
       return '<div class="act-card'+(canNavigate?'':' act-card-static')+'"'+clickAttrs+'>'+
         '<div class="act-header">'+
           '<div class="act-avatars">'+
             '<div class="act-av"><div class="av-fallback" style="background:'+sg+'">'+initials(item.studentName)+'</div>'+
-            (sThumb?'<img src="'+sThumb+'" onerror="this.style.display=\\'none\\'">':'')+
+            (sThumb?'<img src="'+esc(sThumb)+'" onerror="this.style.display=\\'none\\'">':'')+
             '</div>'+
             '<div class="act-av"><div class="av-fallback" style="background:'+lg+'">'+initials(leaderName)+'</div>'+
-            (leaderThumb?'<img src="'+leaderThumb+'" onerror="this.style.display=\\'none\\'">':'')+
+            (leaderThumb?'<img src="'+esc(leaderThumb)+'" onerror="this.style.display=\\'none\\'">':'')+
             '</div>'+
           '</div>'+
           '<div class="act-info">'+
             '<div class="act-names">'+names+'</div>'+
-            '<div class="act-time">'+(item.date?formatDate(item.date)+' · ':'')+timeAgo(item.createdAt)+'</div>'+
+            '<div class="act-time">'+(item.date?esc(formatDate(item.date))+' · ':'')+timeAgo(item.createdAt)+'</div>'+
           '</div>'+
         '</div>'+
-        (summary!==null?'<div class="act-summary">'+summary.slice(0,200)+(summary.length>200?'…':'')+'</div>':'')+
+        (summary!==null?'<div class="act-summary">'+esc(summary.slice(0,200))+(summary.length>200?'…':'')+'</div>':'')+
       '</div>';
     }).join('');
     const cards=el.querySelectorAll('.act-card');

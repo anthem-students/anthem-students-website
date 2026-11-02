@@ -384,7 +384,7 @@ header { padding: 44px 0 24px; text-align: center; }
 }
 .readonly-banner p { font-size: 13px; color: var(--text2); }
 
-/* Shown when the roster sheet can't be loaded, so a fetch failure stops
+/* Shown when the roster can't be loaded, so a fetch failure stops
    looking exactly like an empty roster. */
 .roster-error-banner {
   background: rgba(220,80,80,.07); border: 1px solid rgba(220,80,80,.35);
@@ -528,7 +528,7 @@ header { padding: 44px 0 24px; text-align: center; }
 .card-meta { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
 .meta-item { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; display: flex; gap: 5px; align-items: flex-start; }
 .card-status-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-/* Connection Status (sheet column D). Reads as a status chip rather than a form
+/* Connection Status (the student's status field). Reads as a status chip rather than a form
    control until you interact with it — it sits on a card, not in a form. */
 .status-select, .status-chip {
   font-size: 9px; font-family: 'JetBrains Mono', monospace; letter-spacing: .06em;
@@ -549,7 +549,7 @@ header { padding: 44px 0 24px; text-align: center; }
 .status-core   { background-color: var(--accent-glow); color: var(--accent); border: 1px solid var(--accent-border); }
 .status-loose  { background-color: rgba(96,165,250,.10); color: #60a5fa; border: 1px solid rgba(96,165,250,.24); }
 .status-fringe { background-color: var(--surface3); color: var(--muted); border: 1px solid var(--border); }
-/* Parent connection (sheet column C, derived against the reset window) —
+/* Parent connection (the connected flag, derived against the reset window) —
    the same control as Connection Status above, just a second .status-select
    with its own three colors. A write in flight dims either one the same way. */
 .conn-connected { background-color: rgba(74,222,128,.08); color: var(--connected); border: 1px solid rgba(74,222,128,.18); }
@@ -807,23 +807,27 @@ header { padding: 44px 0 24px; text-align: center; }
 .act-time { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
 .act-summary { font-size: 13px; color: var(--text2); line-height: 1.55; }
 
-/* ── BRAIN DUMP ────────────────────────────────────────────── */
-.dump-wrap { max-width: 660px; margin: 0 auto; padding: 36px 0 60px; }
-.dump-title { font-family: 'Bebas Neue', sans-serif; font-size: 52px; letter-spacing: .06em; }
-.dump-sub { font-size: 13px; color: var(--muted); margin: 8px 0 24px; line-height: 1.6; }
-.dump-area { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 18px 20px; min-height: 180px; font-size: 15px; color: var(--text); font-family: 'Inter', sans-serif; line-height: 1.7; outline: none; resize: vertical; transition: border-color .2s, box-shadow .2s; }
-.dump-area:focus { border-color: var(--accent-border); box-shadow: 0 0 0 4px var(--accent-glow); }
-.dump-area::placeholder { color: var(--muted); }
-.dump-submit { width: 100%; margin-top: 12px; background: var(--accent); border: none; color: #000; font-weight: 700; font-size: 15px; padding: 14px; border-radius: var(--radius); cursor: pointer; transition: opacity .2s, box-shadow .2s; }
-.dump-submit:hover { opacity: .9; box-shadow: 0 6px 24px rgba(245,200,66,.35); }
-.dump-submit:disabled { opacity: .4; cursor: not-allowed; }
-.dump-result { margin-top: 22px; background: var(--surface2); border: 1px solid var(--accent-border); border-radius: var(--radius-lg); padding: 20px; animation: fadeIn .4s; }
-.dump-result-title { font-size: 11px; font-family: 'JetBrains Mono', monospace; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
-.dump-match { padding: 12px 0; border-bottom: 1px solid var(--border); }
-.dump-match:last-child { border-bottom: none; }
-.dump-match-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
-.dump-match-sum { font-size: 13px; color: var(--text2); line-height: 1.5; }
-.dump-match-actions { display: flex; gap: 8px; margin-top: 10px; }
+/* ── QUICK LOG ─────────────────────────────────────────────── */
+.qlog-wrap { max-width: 660px; margin: 0 auto; padding: 36px 0 60px; }
+.qlog-title { font-family: 'Bebas Neue', sans-serif; font-size: 52px; letter-spacing: .06em; }
+.qlog-sub { font-size: 13px; color: var(--muted); margin: 8px 0 24px; line-height: 1.6; }
+.qlog-area { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 18px 20px; min-height: 180px; font-size: 15px; color: var(--text); font-family: 'Inter', sans-serif; line-height: 1.7; outline: none; resize: vertical; transition: border-color .2s, box-shadow .2s; }
+.qlog-area:focus { border-color: var(--accent-border); box-shadow: 0 0 0 4px var(--accent-glow); }
+.qlog-area::placeholder { color: var(--muted); }
+.qlog-submit { width: 100%; margin-top: 12px; background: var(--accent); border: none; color: #000; font-weight: 700; font-size: 15px; padding: 14px; border-radius: var(--radius); cursor: pointer; transition: opacity .2s, box-shadow .2s; }
+.qlog-submit:hover { opacity: .9; box-shadow: 0 6px 24px rgba(245,200,66,.35); }
+.qlog-submit:disabled { opacity: .4; cursor: not-allowed; }
+.qlog-result { margin-top: 22px; background: var(--surface2); border: 1px solid var(--accent-border); border-radius: var(--radius-lg); padding: 20px; animation: fadeIn .4s; }
+.qlog-result-title { font-size: 11px; font-family: 'JetBrains Mono', monospace; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+.qlog-match { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.qlog-match:last-child { border-bottom: none; }
+.qlog-match-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.qlog-match-sum { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.qlog-match-actions { display: flex; gap: 8px; margin-top: 10px; }
+.qlog-tag { font-size: 11px; font-weight: 500; margin-left: 4px; }
+.qlog-tag.ok { color: var(--connected); }
+.qlog-tag.warn { color: var(--warning); }
+.qlog-pick { background: var(--surface); color: var(--text); border: 1px solid var(--border2); border-radius: 8px; padding: 4px 8px; font: inherit; font-weight: 600; }
 
 /* ── ADMIN ─────────────────────────────────────────────────── */
 .admin-tabs { display: flex; gap: 6px; padding: 22px 0 18px; flex-wrap: wrap; }

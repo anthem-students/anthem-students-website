@@ -49,7 +49,7 @@ function applyBranding() {
   const gateLogo = document.getElementById('gate-logo-area');
   const gateLogoEl = document.querySelector('.gate-logo');
   if (logo && gateLogoEl) {
-    gateLogoEl.innerHTML = '<img class="gate-logo-img" src="'+logo+'" alt="'+name+'">';
+    gateLogoEl.innerHTML = '<img class="gate-logo-img" src="'+esc(logo)+'" alt="'+esc(name)+'">';
   }
   const gateSub = document.querySelector('.gate-sub');
   if (gateSub && orgSettings.campus) {
@@ -63,7 +63,7 @@ function applyBranding() {
     // Skip settings nav
     if (el.closest('#screen-settings')) return;
     if (logo) {
-      el.innerHTML = '<img class="nav-logo-img" src="'+logo+'" alt="'+name+'">';
+      el.innerHTML = '<img class="nav-logo-img" src="'+esc(logo)+'" alt="'+esc(name)+'">';
     }
   });
 

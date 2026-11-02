@@ -14,12 +14,12 @@ function populateFilterDropdowns() {
   const schoolEl=document.getElementById('filter-school');
   if(gradeEl){
     const cur=gradeEl.value;
-    gradeEl.innerHTML='<option value="">All Grades</option>'+grades.map(g=>'<option value="'+g+'">Grade '+g+'</option>').join('');
+    gradeEl.innerHTML='<option value="">All Grades</option>'+grades.map(g=>'<option value="'+esc(g)+'">Grade '+esc(g)+'</option>').join('');
     gradeEl.value=cur;
   }
   if(schoolEl){
     const cur=schoolEl.value;
-    schoolEl.innerHTML='<option value="">All Schools</option>'+schools.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+    schoolEl.innerHTML='<option value="">All Schools</option>'+schools.map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
     schoolEl.value=cur;
   }
   const mentorEl=document.getElementById('filter-mentor');
@@ -32,7 +32,7 @@ function populateFilterDropdowns() {
     const list=mentorDirectory().filter(m=>m.primary+m.secondary>0 || m.key===me);
     mentorEl.innerHTML='<option value="">All Mentors</option>'+
       '<option value="__none">No primary mentor ('+unassigned+')</option>'+
-      list.map(m=>'<option value="'+dashEsc(m.key)+'">'+dashEsc(m.name)+(m.isLeader?'':' (volunteer)')+' ('+(m.primary+m.secondary)+')</option>').join('');
+      list.map(m=>'<option value="'+esc(m.key)+'">'+esc(m.name)+(m.isLeader?'':' (volunteer)')+' ('+(m.primary+m.secondary)+')</option>').join('');
     mentorEl.value=cur;
   }
   const myBtn=document.getElementById('my-students-btn');

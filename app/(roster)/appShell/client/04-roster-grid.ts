@@ -1,23 +1,23 @@
 // Connection status rules and the roster grid: loading students, rendering cards, inline status changes.
 // Part of the roster's client script; see ./index.ts.
 export const ROSTER_GRID = `// ── CONNECTION STATUS ────────────────────────────────────────
-// Column D of the sheet. Used to be three page sections; it's now a dropdown
-// on every card, so a student moves between statuses without moving in the DOM.
+// The student's status field. Used to be three page sections; it's now a
+// dropdown on every card, so a student moves between statuses without moving in the DOM.
 const STATUS_LABELS = { core:'Core', loose:'Loosely Connected', fringe:'Fringe' };
 const STATUS_ORDER = ['core','loose','fringe'];
 
 // ── PARENT CONNECTION STATE ──────────────────────────────────
-// Three states, not the sheet's two. A tick in column C used to mean "connected"
-// forever — a family reached once in September still read as connected the
+// Three states, not the database's two. The connected flag alone used to mean
+// "connected" forever — a family reached once in September still read as connected the
 // following June. So the badge is derived from the date instead:
 //
 //   connected  a connection on record, inside the reset window
 //   stale      a connection on record, but older than the window -> needs one
 //   none       no connection has ever been recorded, or a leader unticked it
 //
-// Deriving it (rather than only trusting column C) is what lets a read-only
+// Deriving it (rather than only trusting the connected flag) is what lets a read-only
 // viewer see the same badge as a leader, and what makes changing the window in
-// Adminland re-evaluate everyone the moment it's saved.
+// Settings re-evaluate everyone the moment it's saved.
 const CONNECTION_DEFAULT_MONTHS = 3;
 
 // Same shape as STATUS_LABELS/STATUS_ORDER above — the connection field is a
@@ -41,7 +41,7 @@ function connectionState(person) {
 }
 
 // Everything that counts connections — the filters, the dashboard, Adminland —
-// reads this rather than the raw column C flag, so a stale family is not
+// reads this rather than the raw connected flag, so a stale family is not
 // counted as a connected one.
 function isConnected(person) { return connectionState(person) === 'connected'; }
 function statusOf(p) { return STATUS_LABELS[p.status] ? p.status : 'core'; }
@@ -114,8 +114,8 @@ function applyBootstrapExtras(extras) {
       p.goals = g.goals || [];
       p.primaryGoal = g.primaryGoal || '';
       p.noteCount = noteCountsMap[p.id] || 0;
-      // The sheet's own last-connection cell holds one date; the log behind
-      // it holds all of them. Where they disagree the log wins — a leader
+      // roster_students.last_connected holds one date; the connection log
+      // holds all of them. Where they disagree the log wins — a leader
       // who corrected a wrong day did it there.
       const connEntry = connMap[p.id] || {};
       p.connectionCount = connEntry.count || 0;
@@ -155,7 +155,7 @@ async function sweepStaleConnections() {
       const res = await fetch('/api/students/write', writeInit(params));
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      // Column B is untouched by this write, so the badge stays "Needs
+      // last_connected is untouched by this write, so the badge stays "Needs
       // Connection" rather than falling back to "Not Connected".
       person.connected = false;
       paintConnected(sk, idx, false);
@@ -229,8 +229,8 @@ function makeCard(person, idx, sk) {
 
   const tr = orgSettings?.tracking || {school:true,birthdays:true,age:true,showGrade:true};
   const meta = [
-    (tr.school!==false) && person.school   ? '🏫 '+person.school : '',
-    (tr.birthdays!==false) && person.birthday ? '🎂 '+formatDate(person.birthday)+((tr.age!==false)&&age?' · '+age+'yo':'') : '',
+    (tr.school!==false) && person.school   ? '🏫 '+esc(person.school) : '',
+    (tr.birthdays!==false) && person.birthday ? '🎂 '+esc(formatDate(person.birthday))+((tr.age!==false)&&age?' · '+age+'yo':'') : '',
   ].filter(Boolean).map(t => '<div class="meta-item"><span>'+t+'</span></div>').join('');
   // The actual date of the last parent connection is deliberately not here.
   // The card is a scanning surface — sixty of them at once — and the badge
@@ -265,7 +265,7 @@ function makeCard(person, idx, sk) {
   const done = goals.filter(g=>g.done).length;
   const goalHtml = goals.length
     ? '<div class="goal-bar-wrap"><div class="goal-bar-label"><span>Goals</span><span>'+done+'/'+goals.length+'</span></div><div class="goal-bar-track"><div class="goal-bar-fill" style="width:'+(goals.length?Math.round(done/goals.length*100):0)+'%"></div></div></div>'
-    : (person.primaryGoal ? '<div class="goal-primary">🎯 '+person.primaryGoal.slice(0,40)+'</div>' : '');
+    : (person.primaryGoal ? '<div class="goal-primary">🎯 '+esc(person.primaryGoal.slice(0,40))+'</div>' : '');
 
   const editBtn = canEdit
     ? '<button class="card-edit-btn" onclick="event.stopPropagation();openEditModal(\\''+sk+'\\','+idx+')" title="Edit">✏️</button>'
@@ -277,10 +277,10 @@ function makeCard(person, idx, sk) {
   card.innerHTML = editBtn +
     '<div class="card-avatar"'+(canEdit?' onclick="'+avatarClick+'"':'')+'>'+
     '<div class="av-fallback" style="background:'+g+'">'+initials(person.name)+'</div>'+
-    (thumb ? '<img src="'+thumb+'" alt="" loading="lazy" onerror="this.style.display=\\'none\\'">' : '')+
+    (thumb ? '<img src="'+esc(thumb)+'" alt="" loading="lazy" onerror="this.style.display=\\'none\\'">' : '')+
     (canEdit?'<div class="av-edit-overlay">📷</div>':'')+
-    '</div><div class="card-name-row"><div class="card-name">'+person.name+'</div>'+
-    ((tr.showGrade!==false) && person.grade ? '<span class="badge-grade">Gr.'+person.grade+'</span>' : '')+
+    '</div><div class="card-name-row"><div class="card-name">'+esc(person.name)+'</div>'+
+    ((tr.showGrade!==false) && person.grade ? '<span class="badge-grade">Gr.'+esc(person.grade)+'</span>' : '')+
     apprenticePillHtml(person)+'</div>'+
     (meta ? '<div class="card-meta">'+meta+'</div>' : '')+
     '<div class="card-status-row">'+statusEl+connBadge+'</div>' +
@@ -329,10 +329,10 @@ function lastConnectedLabel(person) {
 // on the select, or a hover on a laptop, still answers "when was it?".
 function connBadgeTitle(person) {
   const when = person.lastConnected ? lastConnectedLabel(person) : 'No connection on record';
-  return dashEsc(when);
+  return esc(when);
 }
 
-// Every sheet write goes through POST. It used to be a GET with the params in
+// Every roster write goes through POST. It used to be a GET with the params in
 // the query string, which meant ?action=delete was reachable by navigation and,
 // with a SameSite=Lax session cookie, a leader clicking a crafted link could
 // delete a student. Cross-site POSTs carry no cookie.
@@ -344,8 +344,8 @@ function writeInit(params) {
   };
 }
 
-// Writes column D. Optimistic: the dropdown already shows the new value, so on
-// failure it's put back rather than left lying about what the sheet holds.
+// Writes the status field. Optimistic: the dropdown already shows the new
+// value, so on failure it's put back rather than left lying about what's saved.
 async function changeStatus(sk, idx, value, el) {
   const person = (DATA[sk].students||[])[idx];
   if (!person || !canEdit) return;
@@ -368,14 +368,15 @@ async function changeStatus(sk, idx, value, el) {
   }
 }
 
-// Writes column C. Same optimistic contract as changeStatus: the control
-// already shows the new value, so on failure it's put back rather than left
-// lying about what the sheet holds. Split into two directions because they do
+// Writes the connected flag. Same optimistic contract as changeStatus: the
+// control already shows the new value, so on failure it's put back rather
+// than left lying about what's saved. Split into two directions because they do
 // genuinely different things underneath — see each for why.
 //
-// Stamps today into column B *explicitly* rather than relying on the Apps
-// Script's OFF -> ON stamp, which wouldn't fire for a stale student whose
-// column C is already ticked, and appends a row to the connection log.
+// Sends today as lastConnected *explicitly* rather than relying on the
+// server's OFF -> ON stamp (api/students/write), which wouldn't fire for a
+// stale student whose flag is already on, and appends a row to the
+// connection log.
 async function connectFamily(sk, idx) {
   const person = (DATA[sk].students||[])[idx];
   if (!person || !canEdit) return;
@@ -405,8 +406,8 @@ async function connectFamily(sk, idx) {
   }
 
   // The log is what the student's screen shows and what the reset window reads
-  // once the sheet's single date cell has been overwritten again. It's appended
-  // after the sheet write so a failed write doesn't leave a phantom day behind,
+  // once last_connected has been overwritten again. It's appended
+  // after the student write so a failed write doesn't leave a phantom day behind,
   // and its own failure is reported without undoing the control — the
   // connection did happen, only the history of it is short one row.
   if (person.id) {
@@ -429,8 +430,8 @@ async function connectFamily(sk, idx) {
 }
 
 // The date and the log are deliberately left alone here — they record the days
-// this family was actually reached, and unticking column C does not undo that.
-// A no-op when the sheet already says Not Connected: a student can still show
+// this family was actually reached, and clearing the flag does not undo that.
+// A no-op when the student is already Not Connected: a student can still show
 // "Needs Connection" in that state (it's driven by how old the date is, not by
 // this flag), and picking that option costs nothing to write.
 async function disconnectFamily(sk, idx) {
@@ -465,10 +466,9 @@ async function toggleParentConnected(sk, idx) {
   else await connectFamily(sk, idx);
 }
 
-// The card's .status-select entry point. "Needs Connection" isn't a value the
-// sheet can hold — column C is a two-item dropdown in Google Sheets and
-// nowhere else to put a third state — so picking it writes the same thing
-// picking "Not Connected" does. The repaint after either one shows whatever
+// The card's .status-select entry point. "Needs Connection" isn't a value
+// that's stored — connected is a boolean — so picking it writes the same
+// thing picking "Not Connected" does. The repaint after either one shows whatever
 // the date actually earns: if it turns out to still be inside the window, it
 // snaps back to "Not Connected", same as it would for a stray click.
 async function changeConnection(sk, idx, value, el) {

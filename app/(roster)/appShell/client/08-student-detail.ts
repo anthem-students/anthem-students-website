@@ -22,9 +22,9 @@ async function renderStudentDetail(sk, index) {
 
   const tr2 = orgSettings?.tracking || {school:true,birthdays:true,age:true,showGrade:true};
   const chips=[
-    (tr2.showGrade!==false) && person.grade   ? '📚 Grade '+person.grade : '',
-    (tr2.school!==false) && person.school  ? '🏫 '+person.school : '',
-    (tr2.birthdays!==false) && person.birthday? '🎂 '+formatDate(person.birthday)+((tr2.age!==false)&&age?' · '+age+'yo':'') : '',
+    (tr2.showGrade!==false) && person.grade   ? '📚 Grade '+esc(person.grade) : '',
+    (tr2.school!==false) && person.school  ? '🏫 '+esc(person.school) : '',
+    (tr2.birthdays!==false) && person.birthday? '🎂 '+esc(formatDate(person.birthday))+((tr2.age!==false)&&age?' · '+age+'yo':'') : '',
     '🔗 '+STATUS_LABELS[statusOf(person)],
   ].filter(Boolean).map(c=>'<div class="chip">'+c+'</div>').join('')
   // Tappable here too, same as the badge on the card. Both carry ids so
@@ -40,7 +40,7 @@ async function renderStudentDetail(sk, index) {
     ? '<button class="nav-btn primary edit-gated" onclick="openEditModal(\\''+sk+'\\','+index+')">Edit</button>'
     : '';
   const logBtn = canEdit && tr2.hangoutNotes !== false
-    ? '<button class="nav-btn" onclick="openInteractionModal(\\''+sk+'\\','+index+',\\''+person.name+'\\')">+ Log Hangout</button>'
+    ? '<button class="nav-btn" onclick="openInteractionModal(\\''+sk+'\\','+index+',DATA[\\''+sk+'\\'].students['+index+'].name)">+ Log Hangout</button>'
     : '';
 
   const sdPhotoAction = person.photoUrl
@@ -51,12 +51,12 @@ async function renderStudentDetail(sk, index) {
     '<div class="student-hero">'+
       '<div class="sd-avatar-wrap"'+sdAvatarClick+'>'+
       '<div class="student-avatar-lg"><div class="av-fallback" style="background:'+g+'">'+initials(person.name)+'</div>'+
-      (thumb?'<img src="'+thumb+'" alt="" onerror="this.style.display=\\'none\\'">':'')+
+      (thumb?'<img src="'+esc(thumb)+'" alt="" onerror="this.style.display=\\'none\\'">':'')+
       '</div>'+
       (canEdit?'<div class="av-cam-overlay">📷</div>':'')+
       '</div>'+
       '<div class="student-info">'+
-        '<div class="student-name">'+person.name+'</div>'+
+        '<div class="student-name">'+esc(person.name)+'</div>'+
         '<div class="student-chips">'+chips+'</div>'+
         '<div class="student-actions">'+editBtn+logBtn+'</div>'+
       '</div>'+
@@ -66,7 +66,7 @@ async function renderStudentDetail(sk, index) {
         '<div class="panel-title">🎯 Goals <span id="goal-count"></span></div>'+
         '<div id="goals-list"><div class="loader"><div class="loader-ring"></div></div></div>'+
         (canEdit?'<div class="add-goal-row"><input class="add-goal-input" id="new-goal-input" placeholder="Add a new goal…"><button class="add-goal-btn" onclick="addGoal()">+</button></div>':'')+
-        (person.primaryGoal?'<div style="margin-top:12px;padding:9px 11px;background:var(--accent-glow);border:1px solid var(--accent-border);border-radius:8px;font-size:12px;color:var(--accent)">⭐ Primary: '+person.primaryGoal+'</div>':'')+
+        (person.primaryGoal?'<div style="margin-top:12px;padding:9px 11px;background:var(--accent-glow);border:1px solid var(--accent-border);border-radius:8px;font-size:12px;color:var(--accent)">⭐ Primary: '+esc(person.primaryGoal)+'</div>':'')+
       '</div>'+
       '<div class="panel" id="notes-panel">'+
         '<div class="panel-title">📝 Notes <span id="note-count"></span></div>'+
@@ -114,30 +114,34 @@ async function renderStudentDetail(sk, index) {
   // warm from the boot-time call, so this is a no-op await most of the time.
   await loadLeaderDirectory();
 
-  // Load notes. null tells renderNotesList the log didn't load, which is not
-  // the same as it being empty — the sheet's own note still shows either way.
-  try {
-    const res=await fetch('/api/student/notes?sk='+sk+'&id='+encodeURIComponent(person.id||''));
-    const d=await res.json();
-    renderNotesList(d.notes||[], sk, index);
-  } catch(e) { renderNotesList(null, sk, index); }
-
-  // Load the connection log. Fetched even while the panel is collapsed: it
-  // carries the count shown in the heading, and it's one small request.
-  try {
-    const res=await fetch('/api/student/connections?sk='+sk+'&id='+encodeURIComponent(person.id||''));
-    const d=await res.json();
-    if (d.latest) person.lastConnected=d.latest;
-    renderConnectionsList(d.connections||[], sk, index);
-  } catch(e) { renderConnectionsList(null, sk, index); }
-
-  // Load interactions (only if hangout notes tracking is enabled)
-  if (tr2.hangoutNotes !== false) {
+  // The three logs load in parallel. Each fetch is caught on its own so one
+  // failing doesn't blank the others. For the notes and hangouts, null means
+  // "didn't load" (shown as an error) and 'hidden' means the session isn't
+  // allowed to read them (a view-only passcode session, by default).
+  const id=encodeURIComponent(person.id||'');
+  const getLog=async (path, field)=>{
     try {
-      const res=await fetch('/api/student/interactions?sk='+sk+'&id='+encodeURIComponent(person.id||''));
-      const d=await res.json();
-      renderInteractionsList(d.interactions||[], sk, index);
-    } catch(e) { document.getElementById('interactions-list').innerHTML='<div class="empty"><p>Could not load.</p></div>'; }
+      const res=await fetch('/api/student/'+path+'?sk='+sk+'&id='+id);
+      if (res.status===403) return 'hidden';
+      if (!res.ok) return null;
+      return (await res.json())[field]||[];
+    } catch(e) { return null; }
+  };
+  const [notes, connRes, interactions]=await Promise.all([
+    getLog('notes','notes'),
+    // Fetched even while the panel is collapsed: it carries the heading's count.
+    fetch('/api/student/connections?sk='+sk+'&id='+id).then(r=>r.ok?r.json():null).catch(()=>null),
+    tr2.hangoutNotes !== false ? getLog('interactions','interactions') : Promise.resolve(null),
+  ]);
+
+  renderNotesList(notes, sk, index);
+  if (connRes && connRes.latest) person.lastConnected=connRes.latest;
+  renderConnectionsList(connRes ? connRes.connections||[] : null, sk, index);
+  if (tr2.hangoutNotes !== false) {
+    const intEl=document.getElementById('interactions-list');
+    if (interactions==='hidden') intEl.innerHTML='<div class="empty"><p>Hangouts are hidden in view-only mode.</p></div>';
+    else if (interactions===null) intEl.innerHTML='<div class="empty"><p>Could not load.</p></div>';
+    else renderInteractionsList(interactions, sk, index);
   }
 }
 
@@ -150,7 +154,7 @@ function renderGoalsList(goals,sk,index) {
   el.innerHTML=goals.map((g,gi)=>
     '<div class="goal-item">'+
       '<div class="goal-check '+(g.done?'done':'')+'" onclick="toggleGoal('+gi+')" title="Toggle"></div>'+
-      '<div class="goal-text '+(g.done?'done':'')+'">'+g.text+'</div>'+
+      '<div class="goal-text '+(g.done?'done':'')+'">'+esc(g.text)+'</div>'+
       (g.primary?'<span class="primary-tag">Primary</span>':'')+
       (canEdit?'<button class="goal-del" onclick="deleteGoal('+gi+')" title="Remove">✕</button>':'')+
     '</div>'
@@ -169,17 +173,17 @@ function renderInteractionsList(interactions, sk, index) {
     const editedTag=int.updatedAt ? ' <span class="int-edited">edited</span>' : '';
     const actBtns=canManage
       ? '<div class="int-actions">'+
-          '<button class="int-action-btn" data-id="'+int.id+'" data-sk="'+sk+'" data-idx="'+index+'" onclick="openEditInteractionModal(this.dataset.id,this.dataset.sk,+this.dataset.idx)">Edit</button>'+
-          '<button class="int-action-btn danger" data-id="'+int.id+'" data-sk="'+sk+'" data-idx="'+index+'" onclick="deleteInteractionNote(this.dataset.id,this.dataset.sk,+this.dataset.idx)">Delete</button>'+
+          '<button class="int-action-btn" data-id="'+esc(int.id)+'" data-sk="'+sk+'" data-idx="'+index+'" onclick="openEditInteractionModal(this.dataset.id,this.dataset.sk,+this.dataset.idx)">Edit</button>'+
+          '<button class="int-action-btn danger" data-id="'+esc(int.id)+'" data-sk="'+sk+'" data-idx="'+index+'" onclick="deleteInteractionNote(this.dataset.id,this.dataset.sk,+this.dataset.idx)">Delete</button>'+
         '</div>'
       : '';
     const lp=findLeaderByEmail(int.leaderEmail);
     return '<div class="int-item">'+
       '<div class="int-header">'+
-        '<div class="int-av">'+initials(int.leader)+(lp&&lp.photoUrl?'<img src="'+(driveThumb(lp.photoUrl)||lp.photoUrl)+'" alt="" onerror="this.style.display=\\'none\\'">':'')+'</div>'+
-        '<div><div class="int-who">'+int.leader+editedTag+'</div><div class="int-when">'+formatDate(int.date)+' · '+timeAgo(int.createdAt)+'</div></div>'+
+        '<div class="int-av">'+initials(int.leader)+(lp&&lp.photoUrl?'<img src="'+esc((driveThumb(lp.photoUrl)||lp.photoUrl))+'" alt="" onerror="this.style.display=\\'none\\'">':'')+'</div>'+
+        '<div><div class="int-who">'+esc(int.leader||'Someone')+editedTag+'</div><div class="int-when">'+formatDate(int.date)+' · '+timeAgo(int.createdAt)+'</div></div>'+
       '</div>'+
-      '<div class="int-body">'+int.summary+'</div>'+
+      '<div class="int-body">'+esc(int.summary)+'</div>'+
       actBtns+
     '</div>';
   }).join('');
@@ -192,9 +196,10 @@ function renderInteractionsList(interactions, sk, index) {
 }
 
 // ── NOTES ─────────────────────────────────────────────────────
-// Two sources, one panel. The sheet's NOTES cell (column J) is the standing
-// note — allergies, family situation, the things that stay true — and it stays
-// pinned on top; this panel is the only place that cell is visible, so the
+// Two sources, one panel. The student's own notes field (edited in the Edit
+// Student modal) is the standing note — allergies, family situation, the
+// things that stay true — and it stays pinned on top; this panel is the only
+// place it's visible, so the
 // running log doesn't get to replace it. Below it, the log itself: roster_kv,
 // newest first, one entry per jot, each stamped with who wrote it.
 //
@@ -202,21 +207,26 @@ function renderInteractionsList(interactions, sk, index) {
 // did someone last meet with this student", this one answers "what do we know
 // about them".
 //
-// Every string below is free text a leader typed, so it goes through dashEsc()
+// Every string below is free text a leader typed, so it goes through esc()
 // before it reaches innerHTML.
 function renderNotesList(notes, sk, index) {
   const el=document.getElementById('notes-list');
   if (!el) return;
   const person=DATA[sk].students[index];
 
-  const sheetNote=(person.notes||'').trim();
-  const pinned = sheetNote
+  const pinnedNote=(person.notes||'').trim();
+  const pinned = pinnedNote
     ? '<div class="note-pinned">'+
         '<div class="note-pinned-label">📌 Pinned note</div>'+
-        '<div class="note-pinned-body">'+dashEsc(sheetNote)+'</div>'+
+        '<div class="note-pinned-body">'+esc(pinnedNote)+'</div>'+
       '</div>'
     : '';
 
+  if (notes==='hidden') {
+    currentNotes=[];
+    el.innerHTML=pinned+'<div class="empty"><p>Notes are hidden in view-only mode.</p></div>';
+    return;
+  }
   // null means the log failed to load, which is not the same as it being
   // empty — say so rather than showing a convincing "No notes yet".
   if (notes===null) {
@@ -231,7 +241,7 @@ function renderNotesList(notes, sk, index) {
   if (nc) nc.textContent = notes.length ? notes.length+' logged' : '';
 
   if (!notes.length) {
-    el.innerHTML=pinned+(sheetNote?'':'<div class="empty"><p>No notes yet.</p></div>');
+    el.innerHTML=pinned+(pinnedNote?'':'<div class="empty"><p>No notes yet.</p></div>');
     return;
   }
 
@@ -244,15 +254,15 @@ function renderNotesList(notes, sk, index) {
     const lp = findLeaderByEmail(n.leaderEmail);
     const head =
       '<div class="int-header">'+
-        '<div class="int-av">'+initials(n.leader||'?')+(lp&&lp.photoUrl?'<img src="'+(driveThumb(lp.photoUrl)||lp.photoUrl)+'" alt="" onerror="this.style.display=\\'none\\'">':'')+'</div>'+
-        '<div><div class="int-who">'+dashEsc(n.leader||'Someone')+editedTag+'</div>'+
+        '<div class="int-av">'+initials(n.leader||'?')+(lp&&lp.photoUrl?'<img src="'+esc((driveThumb(lp.photoUrl)||lp.photoUrl))+'" alt="" onerror="this.style.display=\\'none\\'">':'')+'</div>'+
+        '<div><div class="int-who">'+esc(n.leader||'Someone')+editedTag+'</div>'+
         '<div class="int-when">'+(timeAgo(n.createdAt)||formatDate(n.createdAt))+'</div></div>'+
       '</div>';
 
     if (noteEditingId===n.id) {
       return '<div class="int-item note-item">'+head+
         '<div class="int-body note-body">'+
-          '<textarea class="note-edit-input" id="note-edit-input" rows="3">'+dashEsc(n.text||'')+'</textarea>'+
+          '<textarea class="note-edit-input" id="note-edit-input" rows="3">'+esc(n.text||'')+'</textarea>'+
         '</div>'+
         '<div class="int-actions note-actions-open">'+
           '<button class="int-action-btn" onclick="saveEditNote(\\''+n.id+'\\')">Save</button>'+
@@ -270,7 +280,7 @@ function renderNotesList(notes, sk, index) {
       : '';
 
     return '<div class="int-item note-item">'+head+
-      '<div class="int-body note-body">'+dashEsc(n.text||'')+'</div>'+
+      '<div class="int-body note-body">'+esc(n.text||'')+'</div>'+
       actBtns+
     '</div>';
   }).join('');
@@ -283,8 +293,8 @@ function renderNotesList(notes, sk, index) {
 }
 
 // ── PARENT CONNECTION LOG ─────────────────────────────────────
-// The history behind column B. The sheet can only remember the most recent
-// connection; this is every one of them, with the day it happened, editable
+// The history behind last_connected. The student row only remembers the most
+// recent connection; this is every one of them, with the day it happened, editable
 // because the day often gets logged later than it happened.
 
 function connCountLabel(person) {
@@ -321,10 +331,10 @@ function renderConnectionsList(connections, sk, index) {
   if (cc) cc.textContent = connCountLabel(person);
 
   if (!connections.length) {
-    // A student can carry a date in column B from before this log existed, so
+    // A student can carry a last_connected date from before this log existed, so
     // say where that one date came from rather than claiming there were none.
     el.innerHTML = person.lastConnected
-      ? '<div class="empty"><p>No days logged yet. The roster has ' + dashEsc(formatDate(person.lastConnected)) + ' as the last connection.</p></div>'
+      ? '<div class="empty"><p>No days logged yet. The roster has ' + esc(formatDate(person.lastConnected)) + ' as the last connection.</p></div>'
       : '<div class="empty"><p>No parent connections logged yet.</p></div>';
     return;
   }
@@ -335,8 +345,8 @@ function renderConnectionsList(connections, sk, index) {
     if (connEditingId === c.id) {
       return '<div class="conn-item editing">' +
         '<div class="conn-edit-fields">' +
-          '<input class="conn-date-input dp-input" type="text" id="conn-edit-date" value="' + dashEsc(c.date || '') + '" data-dp-max="' + todayISO() + '" placeholder="Select date" readonly aria-label="Connection date">' +
-          '<input class="add-goal-input" id="conn-edit-note" placeholder="What was it? (optional)" value="' + dashEsc(c.note || '') + '">' +
+          '<input class="conn-date-input dp-input" type="text" id="conn-edit-date" value="' + esc(c.date || '') + '" data-dp-max="' + todayISO() + '" placeholder="Select date" readonly aria-label="Connection date">' +
+          '<input class="add-goal-input" id="conn-edit-note" placeholder="What was it? (optional)" value="' + esc(c.note || '') + '">' +
         '</div>' +
         '<div class="int-actions note-actions-open">' +
           '<button class="int-action-btn" onclick="saveEditConnection(\\'' + c.id + '\\')">Save</button>' +
@@ -356,9 +366,9 @@ function renderConnectionsList(connections, sk, index) {
 
     return '<div class="conn-item">' +
       '<div class="conn-main">' +
-        '<div class="conn-date">' + dashEsc(formatDate(c.date) || c.date || '—') + (ago ? ' <span class="conn-ago">' + ago + '</span>' : '') + '</div>' +
-        (c.note ? '<div class="conn-note">' + dashEsc(c.note) + '</div>' : '') +
-        '<div class="conn-by">' + dashEsc(c.leader || 'Someone') + (c.updatedAt ? ' · edited' : '') + '</div>' +
+        '<div class="conn-date">' + esc(formatDate(c.date) || c.date || '—') + (ago ? ' <span class="conn-ago">' + ago + '</span>' : '') + '</div>' +
+        (c.note ? '<div class="conn-note">' + esc(c.note) + '</div>' : '') +
+        '<div class="conn-by">' + esc(c.leader || 'Someone') + (c.updatedAt ? ' · edited' : '') + '</div>' +
       '</div>' +
       actBtns +
     '</div>';
@@ -371,8 +381,8 @@ function refreshConnectionsPanel() {
 }
 
 // Every write here hands back the log's newest date, and that date is pushed
-// straight into the sheet's column B. Without it, correcting a date in the log
-// would leave the spreadsheet — and the reset window that reads it on the next
+// straight into the student's last_connected. Without it, correcting a date in
+// the log would leave the student row — and the reset window that reads it on the next
 // load — still working off the day that was wrong.
 async function syncLastConnected(sk, index, latest) {
   const person = DATA[sk].students[index];
@@ -387,8 +397,8 @@ async function syncLastConnected(sk, index, latest) {
   try {
     const params = new URLSearchParams({action:'update',payload:JSON.stringify({
       sheet:sk, id:person.id, rowIndex:person.rowIndex,
-      // An emptied log means no connection is on record any more, so column C
-      // has to come off with the date — otherwise the tick outlives its reason.
+      // An emptied log means no connection is on record any more, so the
+      // connected flag comes off with the date — otherwise it outlives its reason.
       fields: next ? {lastConnected: next} : {lastConnected:'', connected:false},
     })});
     const res = await fetch('/api/students/write', writeInit(params));
@@ -631,8 +641,7 @@ async function syncGoals(sk,index) {
   const person=DATA[sk].students[index];
   await saveGoals(sk,person,person.primaryGoal||'',person.goals||[]);
 }
-// Goals no longer have a sheet column — they're stored in roster_kv against
-// the student's stable sheet ID.
+// Goals are stored in roster_kv under goals:{sk}:{id} (see api/student/goals).
 async function saveGoals(sk,person,primaryGoal,goals) {
   if (!person||!person.id) return;
   person.primaryGoal=primaryGoal;
@@ -644,24 +653,26 @@ async function saveGoals(sk,person,primaryGoal,goals) {
 }
 
 // ── INTERACTION MODAL ─────────────────────────────────────────
-function openInteractionModal(sk,index,studentName) {
+// summary pre-fills the text (Quick Log uses it); the leader still confirms.
+function openInteractionModal(sk,index,studentName,summary) {
   interactionKey={sk,index,studentName};
   document.getElementById('int-modal-sub').textContent='with '+studentName;
   sv('int-leader',currentUser?currentUser.name:'');
-  sv('int-date',new Date().toISOString().slice(0,10));
-  sv('int-summary','');
+  sv('int-date',todayISO());
+  sv('int-summary',summary||'');
   openModal('interaction-modal');
 }
 function closeInteractionModal() { closeModal('interaction-modal'); }
 
 async function saveInteraction() {
-  const leader=v('int-leader'), date=v('int-date'), summary=v('int-summary');
-  if (!leader||!summary) { showToast('Leader name and summary required','error'); return; }
+  const date=v('int-date'), summary=v('int-summary');
+  if (!summary) { showToast('Write a summary first','error'); return; }
   const btn=document.querySelector('#interaction-modal .btn-save');
   if(btn){btn.disabled=true;btn.textContent='Saving…';}
   const {sk,index,studentName}=interactionKey;
   const person=DATA[sk].students[index];
-  const interaction={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),leader,date,summary,createdAt:new Date().toISOString(),leaderEmail:currentUser?currentUser.email:''};
+  // The server stamps the id and who logged it from the session.
+  const interaction={date,summary};
   try {
     const res=await fetch('/api/student/interactions',{
       method:'POST',headers:{'Content-Type':'application/json'},

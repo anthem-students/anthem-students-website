@@ -218,10 +218,6 @@ async function afterLogin() {
   await initApp();
 }
 
-function showNeedAccess() {
-  showToast('Contact your team admin or leader to request access.');
-}
-
 // ── INIT ─────────────────────────────────────────────────────
 async function initApp() {
   showScreen('app');
@@ -256,13 +252,13 @@ function updateNav() {
       ? '<button class=\"nav-btn\" onclick=\"openAdminland()\">Adminland</button>' : '';
     const thumb = driveThumb(currentUser.photoUrl);
     const avatarInner = thumb
-      ? '<img class=\"nav-avatar-img\" src=\"'+thumb+'\" alt=\"'+(currentUser.name||'User')+'\" onerror=\"this.style.display=\\'none\\';this.parentElement.classList.remove(\\'has-photo\\')\">'
+      ? '<img class=\"nav-avatar-img\" src=\"'+esc(thumb)+'\" alt=\"'+esc(currentUser.name||'User')+'\" onerror=\"this.style.display=\\'none\\';this.parentElement.classList.remove(\\'has-photo\\')\">'
       : initials(currentUser.name);
     // No photo yet: a dashed ring and a title that says what tapping does —
     // the profile modal is the only place a leader can add one.
     const photoClass = thumb ? ' has-photo' : (currentUser.email ? ' no-photo' : '');
     const avTitle = thumb || !currentUser.email ? currentUser.name : currentUser.name+' · Add your photo';
-    return adminlandBtn + '<button class=\"nav-avatar'+photoClass+'\" onclick=\"openProfileModal()\" title=\"'+avTitle+'\">'+avatarInner+'</button>';
+    return adminlandBtn + '<button class=\"nav-avatar'+photoClass+'\" onclick=\"openProfileModal()\" title=\"'+esc(avTitle)+'\">'+avatarInner+'</button>';
   };
   ['nav-right','student-nav-right'].forEach(id => {
     const el = document.getElementById(id);

@@ -65,8 +65,8 @@ function mentorAvatarHtml(m) {
   const l = m && m.email ? findLeaderByEmail(m.email) : null;
   const thumb = l && l.photoUrl ? (driveThumb(l.photoUrl) || l.photoUrl) : null;
   const g = GRADIENTS[((name.charCodeAt(0)||0) + name.length) % GRADIENTS.length];
-  return '<span class="m-av"><span class="av-fallback" style="background:'+g+'">'+dashEsc(initials(name))+'</span>'+
-    (thumb ? '<img src="'+dashEsc(thumb)+'" alt="" data-leader-email="'+dashEsc(l.email)+'" onerror="this.style.display=\\'none\\'">' : '')+
+  return '<span class="m-av"><span class="av-fallback" style="background:'+g+'">'+esc(initials(name))+'</span>'+
+    (thumb ? '<img src="'+esc(thumb)+'" alt="" data-leader-email="'+esc(l.email)+'" onerror="this.style.display=\\'none\\'">' : '')+
     '</span>';
 }
 // Leader photos carry crop metadata like everyone else's — apply it once the
@@ -85,8 +85,8 @@ function mentorRowHtml(person, sk, idx) {
   const ms = mentorsOf(person);
   const pill = (m, slot) => {
     const name = mentorName(m);
-    const inner = mentorAvatarHtml(m)+'<span class="mentor-pill-name">'+dashEsc(slot === 'secondary' ? firstName(name) : name)+'</span>';
-    const title = (slot === 'primary' ? 'Primary' : 'Secondary')+' mentor: '+dashEsc(name);
+    const inner = mentorAvatarHtml(m)+'<span class="mentor-pill-name">'+esc(slot === 'secondary' ? firstName(name) : name)+'</span>';
+    const title = (slot === 'primary' ? 'Primary' : 'Secondary')+' mentor: '+esc(name);
     const cls = 'mentor-pill'+(slot === 'secondary' ? ' secondary' : '');
     return canEdit
       ? '<button type="button" class="'+cls+'" title="'+title+'" onkeydown="event.stopPropagation()" '+
@@ -105,7 +105,7 @@ function mentorRowHtml(person, sk, idx) {
 function mentorChipHtml(person, sk, idx) {
   const ms = mentorsOf(person);
   const text = ms.primary
-    ? '👤 Mentor: '+dashEsc(mentorName(ms.primary))+(ms.secondary ? ' · '+dashEsc(mentorName(ms.secondary)) : '')
+    ? '👤 Mentor: '+esc(mentorName(ms.primary))+(ms.secondary ? ' · '+esc(mentorName(ms.secondary)) : '')
     : '👤 No mentor yet';
   if (!canEdit) return ms.primary ? '<div class="chip" id="sd-mentor-chip">'+text+'</div>' : '';
   return '<button class="chip chip-toggle" id="sd-mentor-chip" title="Change mentor" '+
@@ -202,7 +202,7 @@ function renderMentorPicker() {
   let html = shown.map((m, i) =>
     '<button type="button" class="mp-option'+(m.key === currentKey ? ' current' : '')+'" onclick="pickMentor('+i+')">'+
       mentorAvatarHtml(m.mentor)+
-      '<span class="mp-opt-name">'+dashEsc(m.name)+'</span>'+
+      '<span class="mp-opt-name">'+esc(m.name)+'</span>'+
       (m.mentor.email ? '' : '<span class="mp-tag">volunteer</span>')+
       (m.key === otherKey ? '<span class="mp-tag">'+other+'</span>' : '')+
       '<span class="mp-opt-count" title="Primary mentor for '+m.primary+' student'+(m.primary === 1 ? '' : 's')+'">'+m.primary+'</span>'+
@@ -210,7 +210,7 @@ function renderMentorPicker() {
   ).join('');
   if (q && !dir.some(m => m.name.toLowerCase() === ql)) {
     html += '<button type="button" class="mp-option mp-free" onclick="pickMentor(-1)">'+
-      '<span class="m-av mp-plus">+</span><span class="mp-opt-name">Use “'+dashEsc(q.slice(0,60))+'”</span>'+
+      '<span class="m-av mp-plus">+</span><span class="mp-opt-name">Use “'+esc(q.slice(0,60))+'”</span>'+
       '<span class="mp-tag">volunteer</span></button>';
   }
   if (!html) html = '<div class="mp-empty">No leaders yet — type a name to add a volunteer.</div>';
@@ -435,7 +435,7 @@ async function loadAdminMentors() {
         ? '<button class="role-btn mk-admin" onclick="viewMentorRow('+i+')">View</button>'+
           '<button class="role-btn revoke" onclick="openReplaceMentor('+i+')">Replace…</button>'
         : '';
-      return row(mentorAvatarHtml(m.mentor).replace('class="m-av"','class="m-av am-av"'), dashEsc(m.name), tag,
+      return row(mentorAvatarHtml(m.mentor).replace('class="m-av"','class="m-av am-av"'), esc(m.name), tag,
         m.primary, m.secondary, m.students, actions, total ? '' : 'am-idle');
     }).join('')+
     '</tbody></table>';
@@ -461,7 +461,7 @@ function openReplaceMentor(i) {
   replaceTargets = mentorDirectory().filter(x => x.key !== m.key);
   const sel = document.getElementById('mr-to');
   sel.innerHTML = '<option value="">Choose…</option>'+
-    replaceTargets.map((x, j) => '<option value="'+j+'">'+dashEsc(x.name)+(x.mentor.email ? '' : ' (volunteer)')+' — '+x.primary+' now</option>').join('')+
+    replaceTargets.map((x, j) => '<option value="'+j+'">'+esc(x.name)+(x.mentor.email ? '' : ' (volunteer)')+' — '+x.primary+' now</option>').join('')+
     '<option value="__new">Someone else (type a name)…</option>'+
     '<option value="__none">Nobody — leave them unassigned</option>';
   document.getElementById('mr-name').value = '';

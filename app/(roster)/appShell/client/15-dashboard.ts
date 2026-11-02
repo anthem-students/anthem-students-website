@@ -16,14 +16,8 @@ const DASH_DOW_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Frida
 const DASH_MEDALS = ['🥇','🥈','🥉'];
 const DASH_STATUS_COLORS = { core:'#4ade80', loose:'#f5c842', fringe:'#f87171' };
 
-// Names and schools come from a spreadsheet leaders type into by hand, so they
-// reach the DOM as text, not markup.
-function dashEsc(v) {
-  return String(v == null ? '' : v)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
+// Names and schools are typed in by leaders, so they reach the DOM through
+// esc() as text, not markup.
 function dashTabLabel(sk) {
   const t = orgSettings && orgSettings.gradeTabs && orgSettings.gradeTabs[sk];
   return (t && t.label) || (sk === 'hs' ? 'High School' : 'Middle School');
@@ -77,7 +71,7 @@ function dashBars(rows, suffix) {
   const max = Math.max.apply(null, rows.map(r => r.value)) || 1;
   return rows.map(r =>
     '<div class="dash-bar-row">' +
-      '<div class="dash-bar-label">' + dashEsc(r.label) + '</div>' +
+      '<div class="dash-bar-label">' + esc(r.label) + '</div>' +
       '<div class="dash-bar-track"><div class="dash-bar-fill" style="width:' + dashPct(r.value, max) + '%"></div></div>' +
       '<div class="dash-bar-val">' + r.value + (suffix || '') + '</div>' +
     '</div>').join('');
@@ -89,7 +83,7 @@ function dashRanks(rows) {
   return rows.map((r, i) =>
     '<div class="dash-bar-row">' +
       '<div class="dash-rank-medal">' + (DASH_MEDALS[i] || (i + 1)) + '</div>' +
-      '<div class="dash-rank-name">' + dashEsc(r.label) + '</div>' +
+      '<div class="dash-rank-name">' + esc(r.label) + '</div>' +
       '<div class="dash-bar-track" style="max-width:110px"><div class="dash-bar-fill" style="width:' + dashPct(r.value, max) + '%"></div></div>' +
       '<div class="dash-bar-val">' + r.value + '</div>' +
     '</div>').join('');
@@ -111,7 +105,7 @@ function dashDonut(segs, centerText) {
   }).join('');
   const legend = segs.map(s =>
     '<div class="dash-legend-item"><span class="dash-legend-dot" style="background:' + s.color + '"></span>' +
-    dashEsc(s.label) + ' · ' + s.value + ' (' + dashPct(s.value, total) + '%)</div>').join('');
+    esc(s.label) + ' · ' + s.value + ' (' + dashPct(s.value, total) + '%)</div>').join('');
   return '<div class="dash-donut-wrap">' +
     '<div class="dash-donut-chart">' +
       '<svg class="dash-donut-svg" viewBox="0 0 100 100">' +
@@ -129,7 +123,7 @@ function dashSpark(cols) {
     '<div class="dash-spark-col' + (c.value === max && max > 0 ? ' peak' : '') + '">' +
       '<div class="dash-spark-n">' + (c.value || '') + '</div>' +
       '<div class="dash-spark-bar" style="height:' + Math.max(2, Math.round(c.value / max * 58)) + 'px"></div>' +
-      '<div class="dash-spark-tick">' + dashEsc(c.tick) + '</div>' +
+      '<div class="dash-spark-tick">' + esc(c.tick) + '</div>' +
     '</div>').join('') + '</div>';
 }
 
@@ -225,7 +219,7 @@ async function renderDashboard() {
       return b.days - a.days;
     }).slice(0, 8);
   const staleHtml = stale.map(s =>
-    '<div class="dash-list-row"><span class="grow">' + dashEsc(s.p.name) + '</span>' +
+    '<div class="dash-list-row"><span class="grow">' + esc(s.p.name) + '</span>' +
     '<span class="dash-list-note ' + (s.days === null || s.days > 60 ? 'warn' : '') + '">' +
     (s.days === null ? 'never' : s.days + 'd ago') + '</span></div>').join('');
 
@@ -278,7 +272,7 @@ async function renderDashboard() {
     .filter(b => b.days !== null && b.days <= 60)
     .sort((a, b) => a.days - b.days).slice(0, 10);
   const bdayHtml = bdays.map(b =>
-    '<div class="dash-list-row"><span class="grow">' + dashEsc(b.p.name) + '</span>' +
+    '<div class="dash-list-row"><span class="grow">' + esc(b.p.name) + '</span>' +
     '<span class="dash-list-note">' + formatDate(b.p.birthday).replace(/,.*$/, '') + '</span>' +
     '<span class="dash-list-note ' + (b.days <= 7 ? 'soon' : '') + '">' +
     (b.days === 0 ? 'today 🎉' : b.days === 1 ? 'tomorrow' : 'in ' + b.days + 'd') + '</span></div>').join('');
@@ -294,7 +288,7 @@ async function renderDashboard() {
 
   // ── trivia ──
   const facts = [];
-  if (schoolRanks.length) facts.push(dashFact('🏫', 'Biggest campus is <b>' + dashEsc(schoolRanks[0].label) + '</b> with <b>' + schoolRanks[0].value + '</b> student' + (schoolRanks[0].value === 1 ? '' : 's') + '.'));
+  if (schoolRanks.length) facts.push(dashFact('🏫', 'Biggest campus is <b>' + esc(schoolRanks[0].label) + '</b> with <b>' + schoolRanks[0].value + '</b> student' + (schoolRanks[0].value === 1 ? '' : 's') + '.'));
   const topMonth = monthCounts.indexOf(Math.max.apply(null, monthCounts));
   if (monthCounts[topMonth] > 0) facts.push(dashFact('🎈', 'More birthdays land in <b>' + DASH_MONTHS[topMonth] + '</b> than any other month (<b>' + monthCounts[topMonth] + '</b>).'));
 
@@ -305,17 +299,17 @@ async function renderDashboard() {
     if (d) { const k = d.getMonth() + '-' + d.getDate(); (byMonthDay[k] = byMonthDay[k] || []).push(p.name); }
   });
   const twins = Object.keys(byMonthDay).filter(k => byMonthDay[k].length > 1);
-  if (twins.length) facts.push(dashFact('👯', '<b>' + twins.length + '</b> birthday' + (twins.length === 1 ? '' : 's') + ' shared by two or more students — including <b>' + dashEsc(byMonthDay[twins[0]].join(' & ')) + '</b>.'));
+  if (twins.length) facts.push(dashFact('👯', '<b>' + twins.length + '</b> birthday' + (twins.length === 1 ? '' : 's') + ' shared by two or more students — including <b>' + esc(byMonthDay[twins[0]].join(' & ')) + '</b>.'));
 
   const initials = dashRanked(dashCountBy(all, p => (p.name || '').trim().charAt(0).toUpperCase()));
-  if (initials.length && initials[0].value > 1) facts.push(dashFact('🔤', '<b>' + initials[0].value + '</b> students have names starting with <b>' + dashEsc(initials[0].label) + '</b> — the most of any letter.'));
+  if (initials.length && initials[0].value > 1) facts.push(dashFact('🔤', '<b>' + initials[0].value + '</b> students have names starting with <b>' + esc(initials[0].label) + '</b> — the most of any letter.'));
 
   if (avgAge) facts.push(dashFact('🧮', 'Average age on the roster is <b>' + avgAge.toFixed(1) + '</b>.'));
   facts.push(dashFact('📸', '<b>' + dashPct(withPhoto, total) + '%</b> of students have a photo on file (' + withPhoto + ' of ' + total + ').'));
   facts.push(dashFact('📝', '<b>' + withNotes + '</b> student' + (withNotes === 1 ? ' has' : 's have') + ' notes written about them.'));
   if (hasCounts && noHangout) facts.push(dashFact('👋', '<b>' + noHangout + '</b> student' + (noHangout === 1 ? ' has' : 's have') + ' never had a hangout logged.'));
   if (withGoals) facts.push(dashFact('🎯', '<b>' + withGoals + '</b> student' + (withGoals === 1 ? '' : 's') + ' are working on goals — <b>' + goalsDone + '</b> of <b>' + goalsTotal + '</b> are done.'));
-  if (gradeHealth.length) facts.push(dashFact('🥇', '<b>' + dashEsc(gradeHealth[0].label) + '</b> is the most connected grade at <b>' + gradeHealth[0].value + '%</b>.'));
+  if (gradeHealth.length) facts.push(dashFact('🥇', '<b>' + esc(gradeHealth[0].label) + '</b> is the most connected grade at <b>' + gradeHealth[0].value + '%</b>.'));
 
   if (act) {
     if (act.busiestDay) facts.push(dashFact('🔥', 'Busiest day was <b>' + formatDate(act.busiestDay.date) + '</b> with <b>' + act.busiestDay.count + '</b> hangouts logged.'));

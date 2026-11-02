@@ -51,24 +51,24 @@ async function loadAdminUsers() {
       const isPending=u.role==='pending';
       const leaderChecked=(isLeader||isAdmin)?'checked':'';
       const leaderDisabled=(isSelf||isAdmin)?'disabled':'';
-      const avatarHtml='<div class="admin-user-avatar" data-email="'+u.email+'" onclick="openAdminUserPhotoEditor(this.dataset.email)" title="'+(u.photoUrl?'Change photo':'Add photo')+'">'+
+      const avatarHtml='<div class="admin-user-avatar" data-email="'+esc(u.email)+'" onclick="openAdminUserPhotoEditor(this.dataset.email)" title="'+(u.photoUrl?'Change photo':'Add photo')+'">'+
         (u.photoUrl
-          ? '<img src="'+(driveThumb(u.photoUrl)||u.photoUrl)+'" alt="" onerror="this.style.display=\\'none\\'">'
+          ? '<img src="'+esc((driveThumb(u.photoUrl)||u.photoUrl))+'" alt="" onerror="this.style.display=\\'none\\'">'
           : '<div class="av-fallback" style="background:'+GRADIENTS[i % GRADIENTS.length]+'">'+initials(u.name)+'</div>')+
         '<div class="admin-user-avatar-overlay">📷</div>'+
       '</div>';
-      return '<tr'+(isSelf?' style="background:var(--accent-glow)"':'')+'><td class="avatar-cell">'+avatarHtml+'</td><td>'+u.name+(isSelf?' <span style="font-size:10px;color:var(--muted)">(you)</span>':'')+'</td>'+
-        '<td style="color:var(--muted)">'+u.email+'</td>'+
-        '<td><span class="role-badge '+u.role+'">'+u.role+'</span></td>'+
+      return '<tr data-email="'+esc(u.email)+'"'+(isSelf?' style="background:var(--accent-glow)"':'')+'><td class="avatar-cell">'+avatarHtml+'</td><td>'+esc(u.name)+(isSelf?' <span style="font-size:10px;color:var(--muted)">(you)</span>':'')+'</td>'+
+        '<td style="color:var(--muted)">'+esc(u.email)+'</td>'+
+        '<td><span class="role-badge '+esc(u.role)+'">'+esc(u.role)+'</span></td>'+
         '<td style="color:var(--muted);font-family:\\'JetBrains Mono\\',monospace;font-size:11px">'+(u.createdAt?new Date(u.createdAt).toLocaleDateString():'—')+'</td>'+
         '<td><div class="btn-row">'+
-          (isPending?'<button class="role-btn approve" onclick="updateUser(\\''+u.email+'\\',\\'leader\\')">Approve</button>':'')+
-          (isPending&&!isSelf?'<button class="role-btn revoke" onclick="declineUser(\\''+u.email+'\\')">Decline</button>':'')+
-          (!isAdmin?'<label class="leader-toggle" title="Toggle leader access"><input type="checkbox" '+leaderChecked+' '+leaderDisabled+' onchange="toggleLeader(\\''+u.email+'\\',this.checked)"><span>Leader</span></label>':'')+
-          (!isSelf&&!isAdmin?'<button class="role-btn mk-admin" onclick="updateUser(\\''+u.email+'\\',\\'admin\\')">→ Admin</button>':'')+
-          (!isSelf&&!isPending?'<button class="role-btn revoke" onclick="updateUser(\\''+u.email+'\\',\\'pending\\')">Revoke</button>':'')+
-          '<button class="role-btn" data-email="'+u.email+'" onclick="changeUserEmail(this.dataset.email)" title="Change sign-in email">Change email</button>'+
-          (u.photoUrl?'<button class="role-btn" data-email="'+u.email+'" onclick="removeAdminUserPhoto(this.dataset.email)" title="Remove photo">Remove photo</button>':'')+
+          (isPending?'<button class="role-btn approve" onclick="updateUser(this.closest(\\'tr\\').dataset.email,\\'leader\\')">Approve</button>':'')+
+          (isPending&&!isSelf?'<button class="role-btn revoke" onclick="declineUser(this.closest(\\'tr\\').dataset.email)">Decline</button>':'')+
+          (!isAdmin?'<label class="leader-toggle" title="Toggle leader access"><input type="checkbox" '+leaderChecked+' '+leaderDisabled+' onchange="toggleLeader(this.closest(\\'tr\\').dataset.email,this.checked)"><span>Leader</span></label>':'')+
+          (!isSelf&&!isAdmin?'<button class="role-btn mk-admin" onclick="updateUser(this.closest(\\'tr\\').dataset.email,\\'admin\\')">→ Admin</button>':'')+
+          (!isSelf&&!isPending?'<button class="role-btn revoke" onclick="updateUser(this.closest(\\'tr\\').dataset.email,\\'pending\\')">Revoke</button>':'')+
+          '<button class="role-btn" data-email="'+esc(u.email)+'" onclick="changeUserEmail(this.dataset.email)" title="Change sign-in email">Change email</button>'+
+          (u.photoUrl?'<button class="role-btn" data-email="'+esc(u.email)+'" onclick="removeAdminUserPhoto(this.dataset.email)" title="Remove photo">Remove photo</button>':'')+
         '</div></td></tr>';
     }).join('')+'</tbody></table>';
   el.querySelectorAll('.admin-user-avatar').forEach(wrap=>{
@@ -87,11 +87,11 @@ async function loadAdminMetrics() {
     const r=await fetch('/api/activity/stats'); const d=await r.json();
     el.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:4px">'+
       '<div class="panel"><div class="panel-title">🏆 Most Active Leaders</div>'+
-      (d.topLeaders||[]).map(l=>'<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span>'+l.name+'</span><span style="color:var(--accent)">'+l.count+' hangouts</span></div>').join('')+
+      (d.topLeaders||[]).map(l=>'<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span>'+esc(l.name)+'</span><span style="color:var(--accent)">'+l.count+' hangouts</span></div>').join('')+
       (!(d.topLeaders||[]).length?'<p style="color:var(--muted);font-size:13px">No data yet</p>':'')+
       '</div>'+
       '<div class="panel"><div class="panel-title">❤️ Most Visited</div>'+
-      (d.topStudents||[]).map(s=>'<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span>'+s.name+'</span><span style="color:var(--accent)">'+s.count+' visits</span></div>').join('')+
+      (d.topStudents||[]).map(s=>'<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span>'+esc(s.name)+'</span><span style="color:var(--accent)">'+s.count+' visits</span></div>').join('')+
       (!(d.topStudents||[]).length?'<p style="color:var(--muted);font-size:13px">No data yet</p>':'')+
       '</div></div>'+
       '<div class="panel" style="margin-top:16px"><div class="panel-title">📊 Overview</div>'+

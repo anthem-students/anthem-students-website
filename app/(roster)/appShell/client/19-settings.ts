@@ -52,10 +52,6 @@ function toggleSettingsSwitch(id) {
     const area = document.getElementById('s-logo-upload-area');
     if (area) area.style.display = el.classList.contains('on') ? 'flex' : 'none';
   }
-  if (id === 's-auto-archive') {
-    const row = document.getElementById('s-archive-weeks-row');
-    if (row) row.style.display = el.classList.contains('on') ? 'block' : 'none';
-  }
 }
 
 function setSettingsSwitch(id, on) {
@@ -79,20 +75,13 @@ function populateSettingsUI() {
   if (logoImg && s.logoUrl) { logoImg.src = s.logoUrl; logoImg.style.display = ''; }
   else if (logoImg) { logoImg.style.display = 'none'; }
 
-  // Grades
-  renderGradeChips(s);
+  // Tab labels
   sv('s-hs-label', s.gradeTabs?.hs?.label || 'High School');
   sv('s-ms-label', s.gradeTabs?.ms?.label || 'Middle School');
-  renderGradeTabChips(s);
-
-  // Default week
-  sv('s-meeting-day', s.meetingDay || 'sunday');
-  sv('s-week-start', s.weekStartsOn || 'sunday');
 
   // Tracking
   const tr = s.tracking || {};
   setSettingsSwitch('s-track-hangoutNotes', tr.hangoutNotes !== false);
-  setSettingsSwitch('s-track-tags', tr.tags || false);
   setSettingsSwitch('s-track-birthdays', tr.birthdays !== false);
   setSettingsSwitch('s-track-showGrade', tr.showGrade !== false);
   setSettingsSwitch('s-track-school', tr.school !== false);
@@ -102,13 +91,6 @@ function populateSettingsUI() {
   sv('s-conn-months', s.connections?.resetAfterMonths || 3);
   setSettingsSwitch('s-conn-auto-reset', s.connections?.autoReset !== false);
 
-  // Defaults
-  sv('s-default-status', s.defaults?.newStudentStatus || 'new');
-  setSettingsSwitch('s-auto-archive', s.defaults?.autoArchive || false);
-  sv('s-archive-weeks', s.defaults?.autoArchiveWeeks || 8);
-  const archRow = document.getElementById('s-archive-weeks-row');
-  if (archRow) archRow.style.display = s.defaults?.autoArchive ? 'block' : 'none';
-
   // Access
   const acc = s.access || {};
   const radios = document.querySelectorAll('input[name="access-mode"]');
@@ -117,7 +99,7 @@ function populateSettingsUI() {
   sv('s-passcode', acc.passcode || '');
   sv('s-request-emails', acc.requestEmails || '');
   const perms = acc.passcodePermissions || {};
-  ['viewRoster','viewAttendance','viewNotes','viewPrayer'].forEach(k => {
+  ['viewRoster','viewNotes'].forEach(k => {
     const cb = document.getElementById('s-perm-'+k);
     if (cb) cb.checked = perms[k] || false;
   });
@@ -127,70 +109,6 @@ function populateSettingsUI() {
   selectSettingsTheme(currentTheme, true);
   setSettingsSwitch('s-compact-mode', s.appearance?.compactMode || false);
   setSettingsSwitch('s-sticky-tabs', s.appearance?.stickyBottomTabs !== false);
-}
-
-// ── Grade Chips ───────────────────────────────────────────────
-function renderGradeChips(s) {
-  const container = document.getElementById('s-grades-chips');
-  if (!container) return;
-  const allGrades = [6,7,8,9,10,11,12];
-  const hsGrades = s.gradeTabs?.hs?.grades || [9,10,11,12];
-  const msGrades = s.gradeTabs?.ms?.grades || [6,7,8];
-  const selected = [...new Set([...hsGrades, ...msGrades])];
-  container.innerHTML = allGrades.map(g =>
-    '<div class="s-chip'+(selected.includes(g)?' selected':'')+'" data-grade="'+g+'" onclick="toggleGradeChip(this)">Grade '+g+'</div>'
-  ).join('');
-}
-
-function toggleGradeChip(el) {
-  el.classList.toggle('selected');
-  markSettingsDirty();
-  syncGradeTabChips();
-}
-
-function renderGradeTabChips(s) {
-  const hsGrades = s.gradeTabs?.hs?.grades || [9,10,11,12];
-  const msGrades = s.gradeTabs?.ms?.grades || [6,7,8];
-  renderGradeTabGroup('s-hs-grades', hsGrades);
-  renderGradeTabGroup('s-ms-grades', msGrades);
-}
-
-function renderGradeTabGroup(containerId, grades) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  el.innerHTML = grades.map(g =>
-    '<div class="s-chip selected" data-grade="'+g+'" onclick="moveGradeChip(this)">'+g+'</div>'
-  ).join('');
-}
-
-function moveGradeChip(el) {
-  const grade = +el.dataset.grade;
-  const parent = el.parentElement;
-  const isHs = parent.id === 's-hs-grades';
-  const target = document.getElementById(isHs ? 's-ms-grades' : 's-hs-grades');
-  if (target) {
-    el.remove();
-    target.appendChild(el);
-    markSettingsDirty();
-  }
-}
-
-function syncGradeTabChips() {
-  const selected = [...document.querySelectorAll('#s-grades-chips .s-chip.selected')].map(c => +c.dataset.grade);
-  const hsEl = document.getElementById('s-hs-grades');
-  const msEl = document.getElementById('s-ms-grades');
-  if (!hsEl || !msEl) return;
-  // Keep existing assignment where possible
-  const currentHs = [...hsEl.querySelectorAll('.s-chip')].map(c => +c.dataset.grade).filter(g => selected.includes(g));
-  const currentMs = [...msEl.querySelectorAll('.s-chip')].map(c => +c.dataset.grade).filter(g => selected.includes(g));
-  const assigned = new Set([...currentHs, ...currentMs]);
-  selected.forEach(g => {
-    if (!assigned.has(g)) {
-      if (g >= 9) currentHs.push(g); else currentMs.push(g);
-    }
-  });
-  renderGradeTabGroup('s-hs-grades', currentHs.sort((a,b)=>a-b));
-  renderGradeTabGroup('s-ms-grades', currentMs.sort((a,b)=>a-b));
 }
 
 // ── Access Mode ───────────────────────────────────────────────
@@ -261,29 +179,15 @@ async function saveSettings() {
     logoUrl: settingsData.logoUrl || '',
     logoTone: settingsData.logoTone || 'light',
     gradeTabs: {
-      hs: {
-        label: v('s-hs-label') || 'High School',
-        grades: [...document.querySelectorAll('#s-hs-grades .s-chip')].map(c => +c.dataset.grade),
-      },
-      ms: {
-        label: v('s-ms-label') || 'Middle School',
-        grades: [...document.querySelectorAll('#s-ms-grades .s-chip')].map(c => +c.dataset.grade),
-      },
+      hs: { label: v('s-hs-label') || 'High School' },
+      ms: { label: v('s-ms-label') || 'Middle School' },
     },
-    meetingDay: v('s-meeting-day'),
-    weekStartsOn: v('s-week-start'),
     tracking: {
       hangoutNotes: document.getElementById('s-track-hangoutNotes')?.classList.contains('on') || false,
-      tags: document.getElementById('s-track-tags')?.classList.contains('on') || false,
       birthdays: document.getElementById('s-track-birthdays')?.classList.contains('on') || false,
       showGrade: document.getElementById('s-track-showGrade')?.classList.contains('on') || false,
       school: document.getElementById('s-track-school')?.classList.contains('on') || false,
       age: document.getElementById('s-track-age')?.classList.contains('on') || false,
-    },
-    defaults: {
-      newStudentStatus: v('s-default-status') || 'new',
-      autoArchive: document.getElementById('s-auto-archive')?.classList.contains('on') || false,
-      autoArchiveWeeks: parseInt(v('s-archive-weeks')) || 8,
     },
     connections: {
       // Clamped rather than trusted: a 0 here would mark every family as
@@ -297,9 +201,7 @@ async function saveSettings() {
       requestEmails: v('s-request-emails'),
       passcodePermissions: {
         viewRoster: document.getElementById('s-perm-viewRoster')?.checked || false,
-        viewAttendance: document.getElementById('s-perm-viewAttendance')?.checked || false,
         viewNotes: document.getElementById('s-perm-viewNotes')?.checked || false,
-        viewPrayer: document.getElementById('s-perm-viewPrayer')?.checked || false,
       },
     },
     appearance: {
@@ -320,15 +222,19 @@ async function saveSettings() {
       settingsOriginal = JSON.parse(JSON.stringify(settingsData));
       settingsDirty = false;
       updateSettingsSaveBtn();
-      // Refresh public settings cache
+      // Mirror what /api/settings/public would now return, so the rest of
+      // the app picks the change up without a reload.
       orgSettings = {
+        ...(orgSettings || {}),
         ministryName: s.ministryName, campus: s.campus,
-        logoUrl: s.logoEnabled ? s.logoUrl : '',
-        logoEnabled: s.logoEnabled, gradeTabs: s.gradeTabs,
+        logoUrl: s.logoEnabled ? s.logoUrl : '', logoTone: s.logoTone,
+        logoEnabled: s.logoEnabled, gradeTabs: settingsData.gradeTabs || s.gradeTabs,
         tracking: s.tracking, connections: s.connections, appearance: s.appearance,
+        accessMode: s.access.mode,
       };
       localStorage.setItem('asm-org-settings', JSON.stringify(orgSettings));
       applyBranding();
+      renderAll(); // picks up renamed tab labels
       document.getElementById('settings-topbar-name').textContent = s.ministryName;
       showToast('✓ Settings saved', 'ok');
     } else showToast(data.error || 'Save failed', 'error');

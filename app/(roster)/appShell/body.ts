@@ -89,7 +89,7 @@ export const HTML_BODY = `
         <button class="nav-pill active" onclick="switchMainNav('roster',this)">Roster</button>
         <button class="nav-pill" onclick="switchMainNav('dashboard',this)">Dashboard</button>
         <button class="nav-pill" onclick="switchMainNav('activity',this)">Activity</button>
-        <button class="nav-pill" onclick="switchMainNav('dump',this)">Brain Dump</button>
+        <button class="nav-pill" onclick="switchMainNav('quicklog',this)">Quick Log</button>
       </div>
       <div class="nav-right" id="nav-right"></div>
       <button class="nav-hamburger" id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Menu">
@@ -102,7 +102,7 @@ export const HTML_BODY = `
     <button class="mob-nav-pill" id="mob-pill-roster"   onclick="switchMainNav('roster',this);closeMobileNav()">Roster</button>
     <button class="mob-nav-pill" id="mob-pill-dashboard" onclick="switchMainNav('dashboard',this);closeMobileNav()">Dashboard</button>
     <button class="mob-nav-pill" id="mob-pill-activity" onclick="switchMainNav('activity',this);closeMobileNav()">Activity</button>
-    <button class="mob-nav-pill" id="mob-pill-dump"     onclick="switchMainNav('dump',this);closeMobileNav()">Brain Dump</button>
+    <button class="mob-nav-pill" id="mob-pill-quicklog" onclick="switchMainNav('quicklog',this);closeMobileNav()">Quick Log</button>
   </div>
 
   <!-- BOTTOM NAV (mobile) -->
@@ -119,9 +119,9 @@ export const HTML_BODY = `
       <svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       <span>Activity</span>
     </button>
-    <button class="bnav-btn" id="bnav-dump" onclick="switchMainNav('dump',this)">
+    <button class="bnav-btn" id="bnav-quicklog" onclick="switchMainNav('quicklog',this)">
       <svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-      <span>Dump</span>
+      <span>Quick Log</span>
     </button>
   </nav>
 
@@ -254,15 +254,15 @@ export const HTML_BODY = `
     </div>
   </div>
 
-  <!-- BRAIN DUMP PANEL -->
-  <div id="nav-dump" class="nav-panel" style="display:none">
+  <!-- QUICK LOG PANEL -->
+  <div id="nav-quicklog" class="nav-panel" style="display:none">
     <div class="container">
-      <div class="dump-wrap">
-        <div class="dump-title">Brain <span style="color:var(--accent)">Dump</span></div>
-        <p class="dump-sub">Just type anything. Names, conversations, prayer requests. AI will match students and let you log each one as a hangout.</p>
-        <textarea id="dump-text" class="dump-area" placeholder="e.g. Had coffee with Lily Larson today. She's been stressed about college apps but is excited about soccer. Also bumped into Josh Mullin at church — he wants to get more plugged in…"></textarea>
-        <button class="dump-submit" id="dump-btn" onclick="processBrainDump()">✨ Process & Assign</button>
-        <div id="dump-result"></div>
+      <div class="qlog-wrap">
+        <div class="qlog-title">Quick <span style="color:var(--accent)">Log</span></div>
+        <p class="qlog-sub">Write about several students at once. We'll find who you mentioned — use first and last names for a sure match — and you can log each one as a hangout after checking it.</p>
+        <textarea id="qlog-text" class="qlog-area" placeholder="e.g. Had coffee with Lily Larson today. She's been stressed about college apps but is excited about soccer. Also bumped into Josh Mullin at church — he wants to get more plugged in…"></textarea>
+        <button class="qlog-submit" id="qlog-btn" onclick="processQuickLog()">Find Students</button>
+        <div id="qlog-result"></div>
       </div>
     </div>
   </div>
@@ -289,6 +289,7 @@ export const HTML_BODY = `
       <div class="nav-logo">ASM <span>Adminland</span></div>
       <div class="nav-right">
         <button class="nav-btn" onclick="showScreen('app')">← Back</button>
+        <button class="nav-btn" onclick="openSettings()">Settings</button>
         <button class="nav-btn danger" onclick="logout()">Log Out</button>
       </div>
     </div>
@@ -381,54 +382,16 @@ export const HTML_BODY = `
           </div>
           <div class="scard-row">
             <div class="field">
-              <label>Grades Served</label>
-              <div class="s-helper">Select which grades your ministry serves. These control filters, labels, and grade-based views.</div>
-              <div class="s-chips" id="s-grades-chips"></div>
-            </div>
-          </div>
-          <div class="scard-row" id="s-grade-tabs-config">
-            <div class="field">
-              <label>Grade Tab Assignment</label>
-              <div class="s-helper">Assign grades to tabs. Drag chips between the two groups.</div>
-              <div class="s-grade-tabs-wrap">
-                <div class="s-grade-tab-group">
-                  <div class="s-grade-tab-label" id="s-hs-tab-label">High School</div>
-                  <input type="text" class="s-grade-tab-name" id="s-hs-label" placeholder="Tab label" oninput="markSettingsDirty()">
-                  <div class="s-chips" id="s-hs-grades"></div>
-                </div>
-                <div class="s-grade-tab-group">
-                  <div class="s-grade-tab-label" id="s-ms-tab-label">Middle School</div>
-                  <input type="text" class="s-grade-tab-name" id="s-ms-label" placeholder="Tab label" oninput="markSettingsDirty()">
-                  <div class="s-chips" id="s-ms-grades"></div>
-                </div>
+              <label>Tab Labels</label>
+              <div class="s-helper">The names on the two roster tabs.</div>
+              <div class="field-row">
+                <div class="field"><input type="text" id="s-hs-label" placeholder="High School" oninput="markSettingsDirty()"></div>
+                <div class="field"><input type="text" id="s-ms-label" placeholder="Middle School" oninput="markSettingsDirty()"></div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="settings-card">
-          <div class="scard-title">Default Week</div>
-          <div class="scard-row">
-            <div class="field-row">
-              <div class="field">
-                <label>Primary Meeting Day</label>
-                <select id="s-meeting-day" onchange="markSettingsDirty()">
-                  <option value="sunday">Sunday</option><option value="monday">Monday</option>
-                  <option value="tuesday">Tuesday</option><option value="wednesday">Wednesday</option>
-                  <option value="thursday">Thursday</option><option value="friday">Friday</option>
-                  <option value="saturday">Saturday</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Week Starts On</label>
-                <select id="s-week-start" onchange="markSettingsDirty()">
-                  <option value="sunday">Sunday</option><option value="monday">Monday</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="s-helper" style="margin-top:8px">Helps with attendance views and weekly summaries.</div>
-        </div>
       </div>
 
       <!-- ── TRACKING TAB ────────────────────────────────────── -->
@@ -441,13 +404,6 @@ export const HTML_BODY = `
               <div class="s-toggle-desc">Leaders can write notes after services or hangouts.</div>
             </div>
             <div class="s-toggle" id="s-track-hangoutNotes" onclick="toggleSettingsSwitch('s-track-hangoutNotes')"><div class="s-toggle-knob"></div></div>
-          </div>
-          <div class="s-toggle-row">
-            <div class="s-toggle-info">
-              <div class="s-toggle-title">Tags / Labels</div>
-              <div class="s-toggle-desc">Add labels like 'new', 'needs follow-up', 'leader'.</div>
-            </div>
-            <div class="s-toggle" id="s-track-tags" onclick="toggleSettingsSwitch('s-track-tags')"><div class="s-toggle-knob"></div></div>
           </div>
           <div class="s-toggle-row">
             <div class="s-toggle-info">
@@ -479,32 +435,6 @@ export const HTML_BODY = `
           </div>
         </div>
 
-        <div class="settings-card">
-          <div class="scard-title">Defaults</div>
-          <div class="scard-row">
-            <div class="field">
-              <label>Default Status for New Students</label>
-              <select id="s-default-status" onchange="markSettingsDirty()">
-                <option value="new">New</option>
-                <option value="regular">Regular</option>
-                <option value="unknown">Unknown</option>
-              </select>
-            </div>
-          </div>
-          <div class="s-toggle-row">
-            <div class="s-toggle-info">
-              <div class="s-toggle-title">Auto-Archive After Inactivity</div>
-              <div class="s-toggle-desc">Automatically archive students who haven't been seen.</div>
-            </div>
-            <div class="s-toggle" id="s-auto-archive" onclick="toggleSettingsSwitch('s-auto-archive')"><div class="s-toggle-knob"></div></div>
-          </div>
-          <div class="scard-row" id="s-archive-weeks-row" style="display:none">
-            <div class="field" style="max-width:200px">
-              <label>Archive After (weeks)</label>
-              <input type="number" id="s-archive-weeks" min="1" max="52" value="8" oninput="markSettingsDirty()">
-            </div>
-          </div>
-        </div>
 
         <div class="settings-card">
           <div class="scard-title">Parent Connections</div>
@@ -518,8 +448,8 @@ export const HTML_BODY = `
           </div>
           <div class="s-toggle-row">
             <div class="s-toggle-info">
-              <div class="s-toggle-title">Update The Sheet Too</div>
-              <div class="s-toggle-desc">When a connection lapses, also set that student's "Connected This Quarter?" back to Not Connected in the Google Sheet. Off means only the app shows it.</div>
+              <div class="s-toggle-title">Clear The Saved Flag Too</div>
+              <div class="s-toggle-desc">When a connection lapses, also clear that student's saved "connected" flag, so filters and counts agree with the badge. Off means only the badge changes.</div>
             </div>
             <div class="s-toggle" id="s-conn-auto-reset" onclick="toggleSettingsSwitch('s-conn-auto-reset')"><div class="s-toggle-knob"></div></div>
           </div>
@@ -563,9 +493,7 @@ export const HTML_BODY = `
                 <label>What Passcode Users Can See</label>
                 <div class="s-checkbox-group">
                   <label class="s-checkbox"><input type="checkbox" id="s-perm-viewRoster" onchange="markSettingsDirty()" checked><span>View roster</span></label>
-                  <label class="s-checkbox"><input type="checkbox" id="s-perm-viewAttendance" onchange="markSettingsDirty()"><span>View attendance summaries</span></label>
-                  <label class="s-checkbox"><input type="checkbox" id="s-perm-viewNotes" onchange="markSettingsDirty()"><span>View notes</span></label>
-                  <label class="s-checkbox"><input type="checkbox" id="s-perm-viewPrayer" onchange="markSettingsDirty()"><span>View prayer requests</span></label>
+                  <label class="s-checkbox"><input type="checkbox" id="s-perm-viewNotes" onchange="markSettingsDirty()"><span>View notes, hangouts and activity</span></label>
                 </div>
               </div>
             </div>
@@ -586,18 +514,6 @@ export const HTML_BODY = `
           </div>
         </div>
 
-        <div class="settings-card">
-          <div class="scard-title">Simple Roles (MVP)</div>
-          <div class="s-helper" style="margin-bottom:12px">What each role can do. Not customizable yet.</div>
-          <table class="s-roles-table">
-            <thead><tr><th>Role</th><th>Roster</th><th>Attendance</th><th>Notes</th><th>Settings</th></tr></thead>
-            <tbody>
-              <tr><td><span class="role-badge admin">Admin</span></td><td>Edit</td><td>Edit</td><td>Edit</td><td>Edit</td></tr>
-              <tr><td><span class="role-badge leader">Leader</span></td><td>Edit</td><td>Edit</td><td>Edit</td><td>—</td></tr>
-              <tr><td><span class="role-badge pending">Viewer</span></td><td>View</td><td>View</td><td>—</td><td>—</td></tr>
-            </tbody>
-          </table>
-        </div>
       </div>
 
       <!-- ── APPEARANCE TAB ──────────────────────────────────── -->
@@ -737,7 +653,7 @@ export const HTML_BODY = `
       </div>
       <div style="flex:1">
         <div class="field" style="margin-bottom:8px">
-          <label>Photo URL (Google Drive)</label>
+          <label>Photo URL</label>
           <input type="text" id="ef-photoUrl" placeholder="Upload a photo, or paste an https:// image link" oninput="updateEditPhotoPreview()">
         </div>
         <label class="upload-label" for="photo-upload-input">📸 Upload Photo</label>
@@ -762,7 +678,7 @@ export const HTML_BODY = `
     </div>
     <div class="field"><label>Primary Goal</label><input type="text" id="ef-primary-goal" placeholder="e.g. Get plugged into a community group"></div>
     <div class="field"><label>Notes</label><textarea id="ef-notes" rows="2" placeholder="Standing notes — allergies, family situation, anything that stays true"></textarea>
-      <div class="field-hint">This is the sheet's NOTES cell, pinned to the top of their Notes panel. Day-to-day notes go in the panel itself.</div>
+      <div class="field-hint">This note is pinned to the top of their Notes panel. Day-to-day notes go in the panel itself.</div>
     </div>
     <div class="field" id="ef-connected-field">
       <label>Connected This Quarter?</label>
@@ -862,7 +778,7 @@ export const HTML_BODY = `
     <button class="modal-close" onclick="closeInteractionModal()">✕</button>
     <div class="modal-title">Log Hangout</div>
     <div class="modal-sub" id="int-modal-sub">with Student</div>
-    <div class="field"><label>Leader Name</label><input type="text" id="int-leader" placeholder="Your name"></div>
+    <div class="field"><label>Leader Name</label><input type="text" id="int-leader" readonly title="Hangouts are logged under your own account"></div>
     <div class="field"><label>Date</label><input type="text" class="dp-input" id="int-date" data-dp-default-today placeholder="Select date" readonly></div>
     <div class="field"><label>What happened? Any key moments or prayer requests?</label><textarea id="int-summary" rows="5" placeholder="e.g. We grabbed coffee and she opened up about some struggles at home. She's been thinking about what it means to grow in her faith. Prayed together at the end."></textarea></div>
     <div class="modal-actions">
